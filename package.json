@@ -1,0 +1,25 @@
+{
+  "name": "projeto_finn",
+  "version": "1.0.0",
+  "description": "Initial commit",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GuilhermeBarros12/projeto_finn.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/GuilhermeBarros12/projeto_finn/issues"
+  },
+  "homepage": "https://github.com/GuilhermeBarros12/projeto_finn#readme",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "prisma": "^7.8.0"
+  }
+}
