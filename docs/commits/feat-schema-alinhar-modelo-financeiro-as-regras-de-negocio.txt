@@ -1,0 +1,37 @@
+Título do commit
+feat-schema-alinhar-modelo-financeiro-as-regras-de-negocio
+
+Resumo
+Alinha o modelo de dados do projeto Finn às regras de negócio documentadas no Notion e aplica as alterações no PostgreSQL local.
+
+Pastas criadas
+- docs/commits/: histórico local de descrições de alterações, vinculado aos títulos de commit.
+- prisma/migrations/20260822163053_align_financial_rules/: migration de alinhamento da estrutura financeira.
+- prisma/migrations/20260822163200_financial_values_must_be_positive/: migration das restrições de valores positivos.
+- prisma/migrations/20260822163400_enforce_user_and_goal_rules/: migration de regras para e-mail e metas.
+
+Arquivos alterados
+- prisma/schema.prisma
+  - Adiciona os enums CategoryType, PaymentMethod, GoalType e GoalStatus.
+  - Inclui o campo type em Transaction.
+  - Troca campos textuais de tipo e pagamento por enums.
+  - Define valores monetários como Decimal(15,2).
+  - Cria o model Goal e seus relacionamentos com User e Category.
+  - Cria índices para filtros de categorias, transações e metas.
+
+Regras aplicadas no PostgreSQL
+- User.email deve estar armazenado em letras minúsculas.
+- Transaction.value deve ser maior que zero.
+- Goal.targetValue deve ser maior que zero.
+- Goal do tipo SAVINGS não pode ter categoria.
+- Goal do tipo SPENDING_LIMIT deve ter categoria.
+
+Regras a validar na camada de serviço
+- A categoria da transação deve ser global ou pertencer ao usuário autenticado.
+- Transaction.type deve ser igual a Category.type.
+- Senhas devem ser transformadas em hash antes de serem salvas.
+
+Validação executada
+- Migrations aplicadas no banco PostgreSQL finn_db local.
+- Prisma Client gerado com sucesso.
+- npm.cmd run check executado com sucesso.

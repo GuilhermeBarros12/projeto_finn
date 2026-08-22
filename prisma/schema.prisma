@@ -12,42 +12,94 @@ datasource db {
   provider = "postgresql"
 }
 
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  CASH
+  BANK_TRANSFER
+  OTHER
+}
+
+enum GoalType {
+  SAVINGS
+  SPENDING_LIMIT
+}
+
+enum GoalStatus {
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+}
+
 model User {
-  id String @id @default(uuid(7))
-  name String
-  email String @unique
-  password String 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  preference Json?
-  category Category[]
+  id           String        @id @default(uuid(7))
+  name         String
+  email        String        @unique
+  password     String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  preference   Json?
+  categories   Category[]
   transactions Transaction[]
-} 
+  goals        Goal[]
+}
 
 model Category {
-  id String @id @default(uuid(7))
-  userId String?
-  user User? @relation(fields: [userId], references: [id])
-  name String 
-  type String
-  icon String
-  color String
-  status Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String        @id @default(uuid(7))
+  userId       String?
+  user         User?         @relation(fields: [userId], references: [id])
+  name         String
+  type         CategoryType
+  icon         String
+  color        String
+  status       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   transactions Transaction[]
+  goals        Goal[]
+
+  @@index([userId, status])
 }
 
 model Transaction {
-  id String @id @default(uuid(7))
-  userId String
-  categoryId String
-  user User @relation(fields: [userId], references: [id])
-  category Category @relation(fields: [categoryId], references: [id])
-  description String
-  date DateTime
-  paymentMethod String
-  value Decimal
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String        @id @default(uuid(7))
+  userId        String
+  categoryId    String
+  user          User          @relation(fields: [userId], references: [id])
+  category      Category      @relation(fields: [categoryId], references: [id])
+  type          CategoryType
+  description   String
+  date          DateTime
+  paymentMethod PaymentMethod
+  value         Decimal       @db.Decimal(15, 2)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([userId, date])
+  @@index([userId, categoryId])
+  @@index([userId, paymentMethod])
+}
+
+model Goal {
+  id          String     @id @default(uuid(7))
+  userId      String
+  categoryId  String?
+  user        User       @relation(fields: [userId], references: [id])
+  category    Category?  @relation(fields: [categoryId], references: [id])
+  title       String
+  type        GoalType
+  targetValue Decimal    @db.Decimal(15, 2)
+  dueDate     DateTime
+  status      GoalStatus @default(IN_PROGRESS)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, categoryId])
 }
