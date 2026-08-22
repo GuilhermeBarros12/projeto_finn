@@ -1,0 +1,44 @@
+Título do commit
+feat-domain-adicionar-categorias-e-transacoes
+
+Resumo
+Implementa os módulos protegidos de categorias e transações, incluindo validação de dados, isolamento por usuário, paginação e filtros.
+
+Pastas criadas
+- src/schemas/: ampliada com os contratos de categoria e transação.
+
+Arquivos criados
+- src/schemas/category.schema.ts: valida criação de categoria, incluindo tipo, ícone e cor hexadecimal.
+- src/schemas/transaction.schema.ts: valida criação, atualização, paginação e filtros de transações.
+- src/services/category.service.ts: implementa listagem, criação e desativação lógica de categorias.
+- src/services/transaction.service.ts: implementa criação, listagem, atualização e exclusão isoladas por usuário.
+- src/controllers/category.controller.ts: camada HTTP do módulo de categorias.
+- src/controllers/transaction.controller.ts: camada HTTP do módulo de transações.
+- src/routes/categories.routes.ts: rotas autenticadas de categorias.
+- src/routes/transactions.routes.ts: rotas autenticadas de transações.
+
+Arquivos alterados
+- src/routes/index.ts: monta /api/categories e /api/transactions.
+
+Endpoints adicionados
+- GET /api/categories: retorna categorias ativas globais (userId nulo) e do usuário autenticado.
+- POST /api/categories: cria categoria vinculada ao usuário autenticado.
+- PATCH /api/categories/:id/deactivate: aplica status=false somente a categoria do próprio usuário e informa a quantidade de transações históricas vinculadas.
+- POST /api/transactions: cria uma transação para o usuário autenticado.
+- GET /api/transactions: lista transações paginadas com page, limit, date, month, year, categoryId e paymentMethod.
+- PUT /api/transactions/:id: atualiza uma transação pertencente ao usuário autenticado.
+- DELETE /api/transactions/:id: remove uma transação pertencente ao usuário autenticado.
+
+Regras aplicadas
+- Todas as rotas de categorias e transações exigem Authorization: Bearer <token>.
+- request.userId vem exclusivamente do token JWT validado.
+- Categorias globais são utilizáveis por todos; categorias personalizadas apenas pelo respectivo dono.
+- Categorias inativas não aparecem na listagem e não aceitam novas transações.
+- O tipo de uma transação deve ser igual ao tipo da categoria.
+- O valor de uma transação deve ser maior que zero, validado na API e protegido pela constraint do PostgreSQL.
+- Nenhuma operação de atualização, exclusão ou desativação permite acessar um registro de outro usuário.
+- A desativação é lógica para preservar o histórico; transações existentes não são apagadas.
+
+Validação executada
+- npm.cmd run check executado com sucesso.
+- npm.cmd run build executado com sucesso.

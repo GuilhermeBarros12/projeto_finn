@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { authRoutes } from "./auth.routes";
+import { categoriesRoutes } from "./categories.routes";
 import { healthRoutes } from "./health.routes";
+import { transactionsRoutes } from "./transactions.routes";
 import { usersRoutes } from "./users.routes";
 
 export const routes = Router();
@@ -8,3 +10,5 @@ export const routes = Router();
 routes.use(healthRoutes);
 routes.use("/users", usersRoutes);
 routes.use("/auth", authRoutes);
+routes.use("/categories", categoriesRoutes);
+routes.use("/transactions", transactionsRoutes);
