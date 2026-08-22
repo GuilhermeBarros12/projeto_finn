@@ -1,0 +1,44 @@
+Título do commit
+feat-auth-adicionar-autenticacao-jwt-e-seguranca-de-senhas
+
+Resumo
+Implementa cadastro de usuários, login com JWT e middleware de autorização para proteger futuras rotas autenticadas.
+
+Pastas criadas
+- src/schemas/: contratos e validações de entrada para autenticação.
+- src/types/: extensão de tipos do Express.
+
+Arquivos criados
+- .env.example: modelo das variáveis DATABASE_URL, JWT_SECRET e JWT_EXPIRES_IN.
+- src/lib/jwt.ts: emissão de tokens JWT com subject igual ao id do usuário.
+- src/schemas/auth.schema.ts: valida nome, e-mail e senha; normaliza o e-mail para minúsculas.
+- src/types/express.d.ts: adiciona request.userId às requisições tipadas do Express.
+- src/services/user.service.ts: valida duplicidade e gera hash bcryptjs com custo 12 antes de salvar o usuário.
+- src/services/auth.service.ts: compara a senha com bcryptjs e retorna token JWT sem expor o hash.
+- src/controllers/user.controller.ts: recebe POST /api/users.
+- src/controllers/auth.controller.ts: recebe POST /api/auth/login.
+- src/middlewares/ensure-authenticated.middleware.ts: valida Authorization: Bearer <token> e injeta request.userId.
+- src/routes/users.routes.ts: registra POST /api/users.
+- src/routes/auth.routes.ts: registra POST /api/auth/login.
+
+Arquivos alterados
+- package.json e package-lock.json: adicionam bcryptjs, jsonwebtoken e @types/jsonwebtoken.
+- .gitignore: ignora a pasta dist/ gerada pelo build.
+- src/config/env.ts: exige JWT_SECRET com mínimo de 32 caracteres e aceita JWT_EXPIRES_IN.
+- src/routes/index.ts: monta as rotas /users e /auth.
+- src/middlewares/error-handler.middleware.ts: retorna erros de validação e conflitos de unicidade de forma controlada.
+
+Endpoints adicionados
+- POST /api/users
+  Body: { "name": "Nome", "email": "email@exemplo.com", "password": "minimo-8-caracteres" }
+- POST /api/auth/login
+  Body: { "email": "email@exemplo.com", "password": "minimo-8-caracteres" }
+
+Configuração necessária
+- Copiar as variáveis de .env.example para .env.
+- Definir JWT_SECRET com uma chave aleatória de pelo menos 32 caracteres.
+- Não versionar o arquivo .env.
+
+Validação executada
+- npm.cmd run check executado com sucesso.
+- npm.cmd run build executado com sucesso.
