@@ -1,0 +1,31 @@
+Título do commit
+feat-dashboard-adicionar-consultas-agregadas
+
+Resumo
+Implementa consultas agregadas protegidas para o dashboard mensal: resumo financeiro e gastos agrupados por categoria.
+
+Arquivos criados
+- src/schemas/dashboard.schema.ts: valida month e year; usa o mês e ano UTC atuais como padrão.
+- src/services/dashboard.service.ts: contém agregações Prisma para totais mensais e despesas por categoria.
+- src/controllers/dashboard.controller.ts: camada HTTP dos endpoints do dashboard.
+- src/routes/dashboard.routes.ts: registra rotas protegidas por JWT.
+
+Arquivos alterados
+- src/routes/index.ts: monta o módulo em /api/dashboard.
+
+Endpoints adicionados
+- GET /api/dashboard/summary?month=8&year=2026
+  Retorna totalIncome, totalExpense e netBalance do usuário autenticado no período solicitado.
+- GET /api/dashboard/by-category?month=8&year=2026
+  Retorna gastos do usuário autenticado agrupados por categoria, com nome, ícone, cor, total e quantidade de transações.
+
+Regras aplicadas
+- Os dois endpoints exigem Authorization: Bearer <token>.
+- Os cálculos incluem exclusivamente transações cujo userId foi obtido do JWT.
+- O saldo líquido é totalIncome menos totalExpense.
+- O agrupamento por categoria considera apenas transações do tipo EXPENSE, apropriadas para gráfico de pizza ou rosca.
+- O período usa início inclusivo e fim exclusivo do mês em UTC para evitar sobreposição entre meses.
+
+Validação executada
+- npm.cmd run check executado com sucesso.
+- npm.cmd run build executado com sucesso.
