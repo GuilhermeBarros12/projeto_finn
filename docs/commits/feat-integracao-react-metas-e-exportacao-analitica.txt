@@ -1,0 +1,55 @@
+Título do commit
+feat-integracao-react-metas-e-exportacao-analitica
+
+Resumo
+Integra um frontend React ao backend, adiciona módulo de metas e disponibiliza exportação paginada de transações em JSON ou CSV.
+
+Pastas criadas
+- frontend/: aplicação React independente, construída com Vite.
+- frontend/src/: cliente HTTP Axios, telas e estilos do cliente.
+
+Backend - arquivos criados
+- src/schemas/goal.schema.ts: valida metas de economia e limite de gasto.
+- src/services/goal.service.ts: operações isoladas de criação, listagem paginada, edição e exclusão de metas.
+- src/controllers/goal.controller.ts e src/routes/goals.routes.ts: endpoints autenticados de metas.
+- src/schemas/export.schema.ts: valida formato JSON ou CSV.
+- src/controllers/export.controller.ts e src/routes/exports.routes.ts: exportação paginada de transações.
+
+Backend - arquivos alterados
+- src/app.ts: adiciona CORS restrito à origem do frontend.
+- src/config/env.ts: adiciona FRONTEND_ORIGIN.
+- src/routes/index.ts: monta /api/goals e /api/exports.
+- package.json e package-lock.json: adicionam cors e seus tipos.
+- .env.example: documenta FRONTEND_ORIGIN.
+
+Endpoints adicionados
+- GET /api/goals?page=1&limit=20&status=IN_PROGRESS
+- POST /api/goals
+- PUT /api/goals/:id
+- DELETE /api/goals/:id
+- GET /api/exports/transactions?format=json&page=1&limit=100
+- GET /api/exports/transactions?format=csv&page=1&limit=100
+
+Regras aplicadas
+- Limite de gasto exige categoria ativa de despesa acessível pelo usuário.
+- Meta de economia não aceita categoria.
+- Metas e exportações exigem JWT e são isoladas por userId.
+- CSV protege contra fórmulas maliciosas em planilhas ao neutralizar valores iniciados por =, +, - ou @.
+
+Frontend
+- Tela de cadastro e login conectada a POST /api/users e POST /api/auth/login.
+- Axios injeta o JWT automaticamente no header Authorization.
+- Dashboard exibe receitas, despesas e saldo.
+- Extrato exibe as dez transações mais recentes.
+- O token é mantido em sessionStorage, removido ao sair e não é versionado.
+- Para produção, evoluir para cookie Secure/HttpOnly com refresh token, pois sessionStorage ainda é acessível a JavaScript em caso de XSS.
+
+Execução
+- Backend: npm.cmd run dev, na raiz do projeto.
+- Frontend: npm.cmd run dev, dentro de frontend/.
+- Configurar frontend/.env com VITE_API_URL=http://localhost:3333/api quando necessário.
+
+Validação executada
+- npm.cmd run check executado com sucesso no backend.
+- npm.cmd run build executado com sucesso no backend.
+- npm.cmd run build executado com sucesso no frontend.

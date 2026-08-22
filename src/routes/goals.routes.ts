@@ -1,0 +1,2 @@
+import { Router } from "express"; import { GoalController } from "../controllers/goal.controller"; import { ensureAuthenticated } from "../middlewares/ensure-authenticated.middleware";
+export const goalsRoutes = Router(); const controller = new GoalController(); goalsRoutes.use(ensureAuthenticated); goalsRoutes.get("/", controller.list); goalsRoutes.post("/", controller.create); goalsRoutes.put("/:id", controller.update); goalsRoutes.delete("/:id", controller.delete);
