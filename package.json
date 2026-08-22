@@ -2,9 +2,14 @@
   "name": "projeto_finn",
   "version": "1.0.0",
   "description": "Initial commit",
-  "main": "index.js",
+  "main": "dist/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
   },
   "repository": {
     "type": "git",
@@ -18,8 +23,20 @@
     "url": "https://github.com/GuilhermeBarros12/projeto_finn/issues"
   },
   "homepage": "https://github.com/GuilhermeBarros12/projeto_finn#readme",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "pg": "^8.16.3",
+    "zod": "^4.1.12"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "@types/express": "^5.0.6",
+    "@types/pg": "^8.15.5",
     "prisma": "^7.8.0"
+    ,"tsx": "^4.20.6",
+    "typescript": "^5.9.3"
   }
 }
