@@ -54,6 +54,7 @@ model Category {
   id           String        @id @default(uuid(7))
   userId       String?
   user         User?         @relation(fields: [userId], references: [id])
+  code         String
   name         String
   type         CategoryType
   icon         String
@@ -65,6 +66,7 @@ model Category {
   goals        Goal[]
 
   @@index([userId, status])
+  @@unique([userId, code])
 }
 
 model Transaction {

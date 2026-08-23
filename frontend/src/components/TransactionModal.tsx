@@ -1,3 +1,32 @@
-import { FormEvent, useEffect, useMemo, useState } from "react"; import { api } from "../api"; import type { Category, Transaction } from "../types"; import { Modal } from "./Modal";
-const account=["PIX","DEBIT_CARD","CASH","BANK_TRANSFER","OTHER"];
-export function TransactionModal({categories,initial,onClose,onSaved}:{categories:Category[];initial?:Transaction;onClose:()=>void;onSaved:()=>void}){const [type,setType]=useState<"INCOME"|"EXPENSE">(initial?.type??"EXPENSE"),[error,setError]=useState("");const [origin,setOrigin]=useState(initial?.paymentMethod==="CREDIT_CARD"?"CREDIT_CARD":"ACCOUNT");const available=useMemo(()=>categories.filter(c=>c.type===type&&c.status),[categories,type]);useEffect(()=>{if(!available.some(c=>c.id===initial?.categoryId)){}},[available,initial]);const submit=async(e:FormEvent<HTMLFormElement>)=>{e.preventDefault();const f=new FormData(e.currentTarget),value=Number(f.get("value"));if(value<=0||!f.get("categoryId")){setError("Informe um valor positivo e uma categoria.");return}const body={description:f.get("description"),value,date:f.get("date"),categoryId:f.get("categoryId"),type,paymentMethod:origin==="CREDIT_CARD"?"CREDIT_CARD":f.get("paymentMethod")};try{initial?await api.put(`/transactions/${initial.id}`,body):await api.post("/transactions",body);onSaved();onClose()}catch{setError("Não foi possível salvar a transação.")}};return <Modal title={initial?"Editar transação":"Nova transação"} onClose={onClose}><form className="form" onSubmit={submit}><div className="tabs"><button type="button" className={type==="EXPENSE"?"active":""} onClick={()=>setType("EXPENSE")}>Despesa</button><button type="button" className={type==="INCOME"?"active":""} onClick={()=>setType("INCOME")}>Receita</button></div><input name="description" required placeholder="Descrição" defaultValue={initial?.description}/><input name="value" required min="0.01" step="0.01" type="number" placeholder="Valor (R$)" defaultValue={initial?.value}/><input name="date" required type="date" defaultValue={(initial?.date??new Date().toISOString()).slice(0,10)}/><select name="categoryId" required defaultValue={initial?.categoryId}><option value="">Selecione a categoria</option>{available.map(c=><option value={c.id} key={c.id}>{c.icon} {c.name}</option>)}</select>{type==="EXPENSE"&&<select value={origin} onChange={e=>setOrigin(e.target.value)}><option value="ACCOUNT">Saldo em conta</option><option value="CREDIT_CARD">Cartão de crédito</option></select>}{origin==="ACCOUNT"&&<select name="paymentMethod" defaultValue={initial?.paymentMethod??"PIX"}>{account.map(x=><option key={x}>{x}</option>)}</select>}{type==="INCOME"&&<select name="paymentMethod" defaultValue={initial?.paymentMethod??"PIX"}>{account.map(x=><option key={x}>{x}</option>)}</select>}<small className="error">{error}</small><button>Salvar transação</button></form></Modal>}
+import { FormEvent, useMemo, useState } from "react";
+import { api } from "../api";
+import type { Category, Transaction } from "../types";
+import { Modal } from "./Modal";
+
+const account = ["PIX", "DEBIT_CARD", "CASH", "BANK_TRANSFER", "OTHER"];
+const initialCents = (value: string | number | undefined) => Math.round(Number(value ?? 0) * 100).toString();
+const formatCurrency = (digits: string) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(digits || "0") / 100);
+
+export function TransactionModal({ categories, initial, onClose, onSaved }: { categories: Category[]; initial?: Transaction; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState<"INCOME" | "EXPENSE">(initial?.type ?? "EXPENSE");
+  const [error, setError] = useState("");
+  const [valueDigits, setValueDigits] = useState(() => initialCents(initial?.value));
+  const [origin, setOrigin] = useState(initial?.paymentMethod === "CREDIT_CARD" ? "CREDIT_CARD" : "ACCOUNT");
+  const available = useMemo(() => categories.filter(category => category.type === type && category.status), [categories, type]);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); const form = new FormData(event.currentTarget); const value = Number(valueDigits || "0") / 100;
+    if (value <= 0 || !form.get("categoryId")) { setError("Informe um valor positivo e uma categoria."); return; }
+    const body = { description: form.get("description"), value, date: form.get("date"), categoryId: form.get("categoryId"), type, paymentMethod: origin === "CREDIT_CARD" ? "CREDIT_CARD" : form.get("paymentMethod") };
+    try { initial ? await api.put(`/transactions/${initial.id}`, body) : await api.post("/transactions", body); onSaved(); onClose(); } catch { setError("Não foi possível salvar a transação."); }
+  };
+  return <Modal title={initial ? "Editar transação" : "Nova transação"} onClose={onClose}><form className="form" onSubmit={submit}>
+    <div className="tabs"><button type="button" className={type === "EXPENSE" ? "active" : ""} onClick={() => setType("EXPENSE")}>Despesa</button><button type="button" className={type === "INCOME" ? "active" : ""} onClick={() => { setType("INCOME"); setOrigin("ACCOUNT"); }}>Receita</button></div>
+    <input name="description" required placeholder="Descrição" defaultValue={initial?.description} />
+    <input aria-label="Valor em reais" inputMode="numeric" placeholder="R$ 0,00" value={formatCurrency(valueDigits)} onChange={event => setValueDigits(event.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} />
+    <input name="date" required type="date" defaultValue={(initial?.date ?? new Date().toISOString()).slice(0, 10)} />
+    <select name="categoryId" required defaultValue={initial?.categoryId}><option value="">Selecione a categoria</option>{available.map(category => <option value={category.id} key={category.id}>{category.icon} {category.name}</option>)}</select>
+    {type === "EXPENSE" && <select value={origin} onChange={event => setOrigin(event.target.value)}><option value="ACCOUNT">Saldo em conta</option><option value="CREDIT_CARD">Cartão de crédito</option></select>}
+    {origin === "ACCOUNT" && <select name="paymentMethod" defaultValue={initial?.paymentMethod ?? "PIX"}>{account.map(method => <option key={method}>{method}</option>)}</select>}
+    <small className="error">{error}</small><button>Salvar transação</button>
+  </form></Modal>;
+}

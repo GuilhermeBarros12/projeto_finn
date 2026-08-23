@@ -1,0 +1,27 @@
+Título do commit
+fix-categorias-por-usuario-e-formulario-de-receita
+
+Resumo
+Corrige a geração de códigos das categorias e o preenchimento do valor no modal de transações.
+
+Arquivos criados
+- prisma/migrations/20260823110000_add_user_category_code/migration.sql: adiciona e preenche o código das categorias existentes; cria a unicidade por usuário e código.
+
+Arquivos alterados
+- prisma/schema.prisma: inclui o campo code em Category e a restrição composta @@unique([userId, code]).
+- src/services/category.service.ts: gera no servidor um código hexadecimal aleatório de 10 caracteres para cada categoria pessoal, com verificação de colisão.
+- frontend/src/types.ts: acrescenta code ao contrato de Category.
+- frontend/src/components/CategoryModal.tsx: exibe o código retornado ao criar uma categoria e mostra o código na lista.
+- frontend/src/components/TransactionModal.tsx: aplica máscara monetária por centavos, remove o seletor duplicado de método de pagamento para receitas e garante uma única origem de recebimento ao alternar a aba.
+- frontend/src/style.css: inclui o estilo da confirmação de código gerado.
+
+Regras preservadas
+- Categorias pessoais permanecem isoladas pelo userId.
+- Um mesmo código pode existir para usuários diferentes.
+- O código é gerado no backend; o navegador apenas o apresenta após a criação bem-sucedida.
+
+Validação executada
+- prisma generate concluído com sucesso.
+- npm.cmd run check concluído com sucesso no backend.
+- npm.cmd run build concluído com sucesso no frontend.
+- npx.cmd prisma migrate deploy aplicou a migration 20260823110000_add_user_category_code ao banco PostgreSQL local finn_db.
