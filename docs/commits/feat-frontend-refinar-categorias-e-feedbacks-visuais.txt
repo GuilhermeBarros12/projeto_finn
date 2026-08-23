@@ -1,0 +1,27 @@
+Título do commit
+feat-frontend-refinar-categorias-e-feedbacks-visuais
+
+Resumo
+Refina a experiência visual do gerenciamento de categorias, do cadastro de transações e das tabelas financeiras.
+
+Arquivos criados
+- frontend/src/components/CategoryIcon.tsx: catálogo reutilizável de ícones lucide-react e componente de exibição com fallback para categorias existentes.
+- frontend/src/ui-refinements.css: estilos incrementais para estados de saldo, seletores visuais, feedback de salvamento e alinhamento de tabelas.
+
+Arquivos alterados
+- frontend/src/components/CategoryModal.tsx: substitui campos livres de ícone/cor por grade de 10 ícones e 10 cores predefinidas clicáveis.
+- frontend/src/components/TransactionModal.tsx: mantém o valor em formato brasileiro e inclui botão primário com estado de salvamento e spinner.
+- frontend/src/main.tsx: usa os ícones visuais nas tabelas, aplica estado positivo/negativo ao saldo e organiza colunas de valor e ações.
+
+Experiência entregue
+- Saldo verde para valores não negativos e vermelho para saldo negativo.
+- Categorias novas guardam o nome técnico do ícone e são renderizadas com lucide-react; categorias antigas usam ícone de fallback quando necessário.
+- Ações de editar e excluir permanecem agrupadas e alinhadas por linha na tabela de despesas.
+- O campo monetário continua no formato R$ e com preenchimento por centavos.
+
+Nota técnica
+- O projeto ainda não tinha Tailwind configurado. As melhorias foram feitas com React, lucide-react e a folha CSS existente, evitando uma migração ampla de todo o layout apenas para esta alteração.
+
+Validação executada
+- npm.cmd run build executado com sucesso no frontend.
+- O Vite manteve apenas o aviso não bloqueante de bundle acima de 500 kB.
