@@ -1,2 +1,3 @@
-import { X } from "lucide-react"; import type { ReactNode } from "react";
-export function Modal({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){return <div className="overlay" role="dialog"><section className="modal"><header><h2>{title}</h2><button className="icon" onClick={onClose}><X/></button></header>{children}</section></div>}
+import { X } from "lucide-react";
+import type { ReactNode } from "react";
+export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) { return <div className="fixed inset-0 z-50 grid place-items-center bg-finn-navy/70 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"><section className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl"><header className="flex items-center justify-between"><h2 className="text-2xl font-semibold tracking-tight">{title}</h2><button aria-label="Fechar" className="grid size-10 place-items-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200" onClick={onClose}><X size={20} /></button></header>{children}</section></div>; }

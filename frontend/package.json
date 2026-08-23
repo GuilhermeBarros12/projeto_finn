@@ -11,12 +11,16 @@
   "license": "ISC",
   "type": "module",
   "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "axios": "^1.19.0",
+    "clsx": "^2.1.1",
     "lucide-react": "^1.33.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.2",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@types/react": "^19.2.18",

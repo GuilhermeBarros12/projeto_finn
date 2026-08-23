@@ -2,34 +2,17 @@ import { FormEvent, useMemo, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { api } from "../api";
 import type { Category, Transaction } from "../types";
+import { cn } from "../lib/cn";
 import { Modal } from "./Modal";
 
 const account = ["PIX", "DEBIT_CARD", "CASH", "BANK_TRANSFER", "OTHER"];
+const paymentLabels: Record<string, string> = { PIX: "PIX", DEBIT_CARD: "Cartão de débito", CASH: "Dinheiro", BANK_TRANSFER: "Transferência", OTHER: "Outro" };
+const inputClass = "w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-finn-forest focus:bg-white focus:ring-4 focus:ring-finn-lime/30";
 const initialCents = (value: string | number | undefined) => Math.round(Number(value ?? 0) * 100).toString();
-const formatCurrency = (digits: string) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(digits || "0") / 100);
+const currency = (digits: string) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(digits || "0") / 100);
 
 export function TransactionModal({ categories, initial, onClose, onSaved }: { categories: Category[]; initial?: Transaction; onClose: () => void; onSaved: () => void }) {
-  const [type, setType] = useState<"INCOME" | "EXPENSE">(initial?.type ?? "EXPENSE");
-  const [error, setError] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [valueDigits, setValueDigits] = useState(() => initialCents(initial?.value));
-  const [origin, setOrigin] = useState(initial?.paymentMethod === "CREDIT_CARD" ? "CREDIT_CARD" : "ACCOUNT");
-  const available = useMemo(() => categories.filter(category => category.type === type && category.status), [categories, type]);
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); const form = new FormData(event.currentTarget); const value = Number(valueDigits || "0") / 100;
-    if (value <= 0 || !form.get("categoryId")) { setError("Informe um valor positivo e uma categoria."); return; }
-    const body = { description: form.get("description"), value, date: form.get("date"), categoryId: form.get("categoryId"), type, paymentMethod: origin === "CREDIT_CARD" ? "CREDIT_CARD" : form.get("paymentMethod") };
-    setError(""); setIsSaving(true);
-    try { initial ? await api.put(`/transactions/${initial.id}`, body) : await api.post("/transactions", body); onSaved(); onClose(); } catch { setError("Não foi possível salvar a transação."); } finally { setIsSaving(false); }
-  };
-  return <Modal title={initial ? "Editar transação" : "Nova transação"} onClose={onClose}><form className="form" onSubmit={submit}>
-    <div className="tabs"><button type="button" className={type === "EXPENSE" ? "active" : ""} onClick={() => setType("EXPENSE")}>Despesa</button><button type="button" className={type === "INCOME" ? "active" : ""} onClick={() => { setType("INCOME"); setOrigin("ACCOUNT"); }}>Receita</button></div>
-    <input name="description" required placeholder="Descrição" defaultValue={initial?.description} />
-    <input aria-label="Valor em reais" inputMode="numeric" placeholder="R$ 0,00" value={formatCurrency(valueDigits)} onChange={event => setValueDigits(event.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} />
-    <input name="date" required type="date" defaultValue={(initial?.date ?? new Date().toISOString()).slice(0, 10)} />
-    <select name="categoryId" required defaultValue={initial?.categoryId}><option value="">Selecione a categoria</option>{available.map(category => <option value={category.id} key={category.id}>{category.icon} {category.name}</option>)}</select>
-    {type === "EXPENSE" && <select value={origin} onChange={event => setOrigin(event.target.value)}><option value="ACCOUNT">Saldo em conta</option><option value="CREDIT_CARD">Cartão de crédito</option></select>}
-    {origin === "ACCOUNT" && <select name="paymentMethod" defaultValue={initial?.paymentMethod ?? "PIX"}>{account.map(method => <option key={method}>{method}</option>)}</select>}
-    <small className="error">{error}</small><button className="primary submit-button" disabled={isSaving}>{isSaving && <LoaderCircle className="spinner" size={17} />} {isSaving ? "Salvando..." : "Salvar transação"}</button>
-  </form></Modal>;
+  const [type, setType] = useState<"INCOME" | "EXPENSE">(initial?.type ?? "EXPENSE"); const [error, setError] = useState(""); const [saving, setSaving] = useState(false); const [valueDigits, setValueDigits] = useState(() => initialCents(initial?.value)); const [origin, setOrigin] = useState(initial?.paymentMethod === "CREDIT_CARD" ? "CREDIT_CARD" : "ACCOUNT"); const available = useMemo(() => categories.filter(category => category.type === type && category.status), [categories, type]);
+  const submit = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); const form = new FormData(event.currentTarget); const value = Number(valueDigits || "0") / 100; if (value <= 0 || !form.get("categoryId")) { setError("Informe um valor positivo e uma categoria."); return; } setError(""); setSaving(true); const body = { description: form.get("description"), value, date: form.get("date"), categoryId: form.get("categoryId"), type, paymentMethod: origin === "CREDIT_CARD" ? "CREDIT_CARD" : form.get("paymentMethod") }; try { initial ? await api.put(`/transactions/${initial.id}`, body) : await api.post("/transactions", body); onSaved(); onClose(); } catch { setError("Não foi possível salvar a transação."); } finally { setSaving(false); } };
+  return <Modal title={initial ? "Editar transação" : "Nova transação"} onClose={onClose}><form className="mt-6 space-y-4" onSubmit={submit}><div className="grid grid-cols-2 rounded-full bg-slate-100 p-1"><button type="button" className={cn("rounded-full py-2.5 text-sm font-semibold transition", type === "EXPENSE" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500")} onClick={() => setType("EXPENSE")}>Despesa</button><button type="button" className={cn("rounded-full py-2.5 text-sm font-semibold transition", type === "INCOME" ? "bg-finn-lime text-finn-forest shadow-sm" : "text-slate-500")} onClick={() => { setType("INCOME"); setOrigin("ACCOUNT"); }}>Receita</button></div><input className={inputClass} name="description" required placeholder="Descrição" defaultValue={initial?.description} /><input className={cn(inputClass, "text-lg font-semibold")} aria-label="Valor em reais" inputMode="numeric" value={currency(valueDigits)} onChange={event => setValueDigits(event.target.value.replace(/\D/g, "").replace(/^0+(?=\d)/, ""))} /><div className="grid gap-3 sm:grid-cols-2"><input className={inputClass} name="date" required type="date" defaultValue={(initial?.date ?? new Date().toISOString()).slice(0, 10)} /><select className={inputClass} name="categoryId" required defaultValue={initial?.categoryId}><option value="">Selecione a categoria</option>{available.map(category => <option value={category.id} key={category.id}>{category.name}</option>)}</select></div>{type === "EXPENSE" && <select className={inputClass} value={origin} onChange={event => setOrigin(event.target.value)}><option value="ACCOUNT">Saldo em conta</option><option value="CREDIT_CARD">Cartão de crédito</option></select>}{origin === "ACCOUNT" && <select className={inputClass} name="paymentMethod" defaultValue={initial?.paymentMethod ?? "PIX"}>{account.map(method => <option value={method} key={method}>{paymentLabels[method]}</option>)}</select>}{error && <p className="text-sm font-medium text-rose-600">{error}</p>}<button className="flex w-full items-center justify-center gap-2 rounded-full bg-finn-forest px-5 py-3 font-semibold text-white transition hover:bg-finn-navy disabled:opacity-60" disabled={saving}>{saving && <LoaderCircle className="animate-spin" size={17} />}{saving ? "Salvando..." : "Salvar transação"}</button></form></Modal>;
 }

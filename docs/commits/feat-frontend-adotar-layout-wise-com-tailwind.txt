@@ -1,0 +1,37 @@
+Título do commit
+feat-frontend-adotar-layout-wise-com-tailwind
+
+Resumo
+Reformula a identidade visual do Finn com uma linguagem moderna inspirada em fintechs, usando Tailwind CSS como base exclusiva de estilização.
+
+Dependências adicionadas
+- tailwindcss e @tailwindcss/vite: tema, utilitários e integração ao Vite.
+- clsx e tailwind-merge: composição segura de classes dinâmicas por meio da função cn.
+
+Arquivos criados
+- frontend/src/lib/cn.ts: helper que combina clsx e tailwind-merge.
+- frontend/src/components/AppSidebar.tsx: navegação lateral fixa com Dashboard, Despesas, Categorias, Metas e Insights.
+- frontend/src/components/StatCard.tsx: card reutilizável para indicadores financeiros.
+- frontend/src/components/RecentTransactions.tsx: bloco modular do extrato recente.
+
+Arquivos alterados
+- frontend/vite.config.ts: adiciona o plugin oficial do Tailwind para Vite.
+- frontend/src/style.css: substitui os estilos legados por importação Tailwind, tema de cores Finn e estilos base mínimos.
+- frontend/src/main.tsx: introduz o layout Sidebar + Main Content, dashboard arredondado, telas de autenticação e despesas com Tailwind.
+- frontend/src/components/Modal.tsx: aplica modal arredondado e responsivo em Tailwind.
+- frontend/src/components/CategoryModal.tsx: adota seletores de ícone/cor e formulários com a nova identidade visual.
+- frontend/src/components/TransactionModal.tsx: adota campos, abas, máscara R$ e feedback de salvamento na nova identidade.
+- frontend/package.json e frontend/package-lock.json: registram as dependências visuais.
+
+Arquivos removidos
+- frontend/src/ui-refinements.css: estilos incrementais anteriores substituídos pela camada utilitária do Tailwind.
+
+Experiência entregue
+- Fundo ardósia, superfícies brancas rounded-3xl, CTA em verde fintech e efeitos de elevação em hover.
+- Sidebar fixa em telas grandes e naturalmente responsiva em telas menores.
+- Saldo total usa destaque verde ou vermelho conforme seu valor.
+- Dashboard separa cards, extrato recente e acesso rápido em componentes reutilizáveis.
+
+Validação executada
+- npm.cmd run build concluído com sucesso no frontend.
+- O Vite informou apenas o aviso não bloqueante de bundle acima de 500 kB.
