@@ -1,0 +1,33 @@
+Título do commit
+feat-api-enriquecer-transacoes-e-filtros-dashboard
+
+Resumo
+Enriquece o extrato com dados visuais da categoria e adiciona filtros de categoria e origem às consultas financeiras.
+
+Arquivos alterados
+- src/schemas/transaction.schema.ts
+  - Adiciona o filtro origin com ACCOUNT ou CREDIT_CARD.
+  - Impede enviar origin e paymentMethod na mesma consulta.
+- src/schemas/dashboard.schema.ts
+  - Adiciona categoryId e origin aos filtros de dashboard.
+- src/services/transaction.service.ts
+  - Inclui id, nome, ícone e cor da categoria em cada item da listagem.
+  - Aplica o filtro de origem na listagem e na exportação, que reutiliza esta consulta.
+- src/services/dashboard.service.ts
+  - Aplica categoryId e origin tanto no resumo mensal quanto no agrupamento por categoria.
+
+Contrato de API atualizado
+- GET /api/transactions retorna category em cada transação.
+- GET /api/transactions aceita origin=ACCOUNT ou origin=CREDIT_CARD.
+- GET /api/dashboard/summary aceita month, year, categoryId e origin.
+- GET /api/dashboard/by-category aceita month, year, categoryId e origin.
+- GET /api/exports/transactions também aceita origin, por reutilizar a listagem paginada.
+
+Mapeamento de origem
+- CREDIT_CARD: paymentMethod=CREDIT_CARD.
+- ACCOUNT: PIX, DEBIT_CARD, CASH, BANK_TRANSFER ou OTHER.
+
+Validação executada
+- npm.cmd run check executado com sucesso no backend.
+- npm.cmd run build executado com sucesso no backend.
+- npm.cmd run build executado com sucesso no frontend.

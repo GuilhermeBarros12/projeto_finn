@@ -7,8 +7,12 @@ import type {
   UpdateTransactionInput,
 } from "../schemas/transaction.schema";
 
+export type TransactionWithCategory = Prisma.TransactionGetPayload<{
+  include: { category: { select: { id: true; name: true; icon: true; color: true } } };
+}>;
+
 export interface PaginatedTransactions {
-  data: Transaction[];
+  data: TransactionWithCategory[];
   meta: { page: number; limit: number; total: number; totalPages: number };
 }
 
@@ -43,6 +47,10 @@ export class TransactionService {
 
     if (input.categoryId) where.categoryId = input.categoryId;
     if (input.paymentMethod) where.paymentMethod = input.paymentMethod;
+    if (input.origin === "CREDIT_CARD") where.paymentMethod = "CREDIT_CARD";
+    if (input.origin === "ACCOUNT") {
+      where.paymentMethod = { in: ["PIX", "DEBIT_CARD", "CASH", "BANK_TRANSFER", "OTHER"] };
+    }
 
     if (input.date) {
       const start = new Date(`${input.date}T00:00:00.000Z`);
@@ -65,6 +73,7 @@ export class TransactionService {
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         skip: (input.page - 1) * input.limit,
         take: input.limit,
+        include: { category: { select: { id: true, name: true, icon: true, color: true } } },
       }),
       prisma.transaction.count({ where }),
     ]);

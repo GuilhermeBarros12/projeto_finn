@@ -33,6 +33,7 @@ export const transactionListSchema = z
     year: z.coerce.number().int().min(2000).max(2100).optional(),
     categoryId: z.uuid().optional(),
     paymentMethod: transactionFields.paymentMethod.optional(),
+    origin: z.enum(["ACCOUNT", "CREDIT_CARD"]).optional(),
   })
   .superRefine((input, context) => {
     if (input.month !== undefined && input.year === undefined) {
@@ -41,6 +42,10 @@ export const transactionListSchema = z
 
     if (input.date && (input.month !== undefined || input.year !== undefined)) {
       context.addIssue({ code: "custom", path: ["date"], message: "Use date ou month/year, não ambos." });
+    }
+
+    if (input.origin && input.paymentMethod) {
+      context.addIssue({ code: "custom", path: ["origin"], message: "Use origin ou paymentMethod, não ambos." });
     }
   });
 

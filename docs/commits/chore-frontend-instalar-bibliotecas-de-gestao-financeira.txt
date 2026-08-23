@@ -1,0 +1,17 @@
+Título do commit
+chore-frontend-instalar-bibliotecas-de-gestao-financeira
+
+Resumo
+Prepara o frontend para a implementação das telas e componentes de gestão financeira.
+
+Arquivos alterados
+- frontend/package.json: adiciona lucide-react, recharts e react-router-dom.
+- frontend/package-lock.json: registra as versões resolvidas das dependências.
+
+Bibliotecas instaladas
+- lucide-react: ícones acessíveis e consistentes para ações, navegação, categorias e estados vazios.
+- recharts: gráficos de rosca/pizza e barras da página de despesas.
+- react-router-dom: navegação entre dashboard e a rota exclusiva de despesas.
+
+Validação executada
+- npm.cmd run build executado com sucesso no frontend.

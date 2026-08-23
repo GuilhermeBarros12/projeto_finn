@@ -1,0 +1,29 @@
+Título do commit
+feat-frontend-implementar-gestao-financeira
+
+Resumo
+Implementa a gestão financeira principal no React: lançamentos, categorias, dashboard enriquecido e página de despesas com filtros e gráficos.
+
+Arquivos criados
+- frontend/src/types.ts: contratos de categoria, transação e resumo.
+- frontend/src/components/Modal.tsx: base reutilizável de modal.
+- frontend/src/components/TransactionModal.tsx: criação e edição de receitas e despesas.
+- frontend/src/components/CategoryModal.tsx: criação e desativação lógica de categorias.
+
+Arquivos alterados
+- frontend/src/main.tsx: adiciona autenticação, rotas Dashboard/Despesas, estados de carregamento/vazio, tabelas, filtros, gráficos e ações CRUD.
+- frontend/src/style.css: aplica layout responsivo, modais, tags, cards, tabelas e estados visuais.
+
+Funcionalidades entregues
+- Botões de Nova transação e Categorias no dashboard.
+- Modal de lançamento com abas Receita/Despesa, categoria filtrada por tipo, valor positivo, data e origem/pagamento.
+- Categorias pessoais podem ser criadas e desativadas; categorias globais não recebem ação de desativação.
+- Dashboard mostra categoria com ícone/cor, origem visual e valores positivos/negativos destacados.
+- Rota /despesas com mês, ano, categoria e origem como filtros.
+- Gráfico de rosca para gastos por categoria e gráfico de barras para Conta versus Cartão.
+- Edição e exclusão de despesa diretamente na tabela detalhada.
+- Estados de carregamento e mensagens amigáveis quando não houver lançamentos.
+
+Validação executada
+- npm.cmd run build executado com sucesso no frontend.
+- Vite informou apenas aviso não bloqueante sobre tamanho do bundle; Recharts poderá ser carregado sob demanda em uma otimização futura.

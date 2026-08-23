@@ -1,4 +1,4 @@
-import { type CategoryType } from "../../generated/prisma/client";
+import { Prisma, type CategoryType } from "../../generated/prisma/client";
 import { prisma } from "../lib/prisma";
 import type { DashboardPeriodInput } from "../schemas/dashboard.schema";
 
@@ -23,6 +23,17 @@ export class DashboardService {
     };
   }
 
+  private getFilters(userId: string, period: DashboardPeriodInput): Prisma.TransactionWhereInput {
+    const { start, end } = this.getDateRange(period);
+    const where: Prisma.TransactionWhereInput = { userId, date: { gte: start, lt: end } };
+    if (period.categoryId) where.categoryId = period.categoryId;
+    if (period.origin === "CREDIT_CARD") where.paymentMethod = "CREDIT_CARD";
+    if (period.origin === "ACCOUNT") {
+      where.paymentMethod = { in: ["PIX", "DEBIT_CARD", "CASH", "BANK_TRANSFER", "OTHER"] };
+    }
+    return where;
+  }
+
   private getTotalByType(
     groups: Array<{ type: CategoryType; _sum: { value: { toNumber(): number } | null } }>,
     type: CategoryType,
@@ -31,10 +42,9 @@ export class DashboardService {
   }
 
   async summary(userId: string, period: DashboardPeriodInput): Promise<DashboardSummary> {
-    const { start, end } = this.getDateRange(period);
     const groups = await prisma.transaction.groupBy({
       by: ["type"],
-      where: { userId, date: { gte: start, lt: end } },
+      where: this.getFilters(userId, period),
       _sum: { value: true },
     });
 
@@ -50,10 +60,9 @@ export class DashboardService {
   }
 
   async expensesByCategory(userId: string, period: DashboardPeriodInput): Promise<CategoryExpense[]> {
-    const { start, end } = this.getDateRange(period);
     const groups = await prisma.transaction.groupBy({
       by: ["categoryId"],
-      where: { userId, type: "EXPENSE", date: { gte: start, lt: end } },
+      where: { ...this.getFilters(userId, period), type: "EXPENSE" },
       _sum: { value: true },
       _count: { _all: true },
       orderBy: { _sum: { value: "desc" } },
