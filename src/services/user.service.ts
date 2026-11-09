@@ -4,7 +4,7 @@ import { AppError } from "../lib/app-error";
 import { prisma } from "../lib/prisma";
 import type { CreateUserInput } from "../schemas/auth.schema";
 
-const PASSWORD_SALT_ROUNDS = 12;
+export const PASSWORD_SALT_ROUNDS = 12;
 
 export type PublicUser = Pick<User, "id" | "name" | "email" | "createdAt" | "updatedAt">;
 

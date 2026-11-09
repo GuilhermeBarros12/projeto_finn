@@ -1,0 +1,92 @@
+Título do commit
+feat-app-sessao-segura-metas-e-preparo-para-producao
+
+Resumo
+Corrige os bugs encontrados na revisão geral, cria a rede de segurança (testes, lint, formatação e CI), completa o produto (metas, receitas, exclusão, exportação completa e categorias iniciais) e prepara a entrega em produção com sessão renovável, limite de tentativas, logs e Docker.
+
+Dependências adicionadas
+- helmet: cabeçalhos HTTP de segurança na API.
+- express-rate-limit: limite de tentativas de login, cadastro e renovação de sessão.
+- pino e pino-http: logs estruturados em JSON, sem tokens, cookies ou senhas.
+- cookie-parser: leitura do cookie HttpOnly do refresh token.
+- vitest, supertest e @types/supertest: testes de integração da API com banco real.
+- eslint, @eslint/js, typescript-eslint, eslint-plugin-react-hooks, eslint-config-prettier, globals e prettier: lint e formatação da API e do frontend.
+- vitest, jsdom, @testing-library/react, @testing-library/user-event e @testing-library/jest-dom (frontend): testes de componentes e do cliente HTTP.
+- npm audit fix: atualização de zod, prisma, express e transitivas; zero vulnerabilidades em produção na API e no frontend.
+
+Arquivos criados
+- prisma/migrations/20261105120000_add_refresh_tokens/: tabela RefreshToken, que guarda só o hash do token de renovação.
+- prisma/seed.ts: 10 categorias globais, idempotente.
+- src/lib/dates.ts: calendarDay, que calcula o dia do calendário no fuso APP_TIMEZONE.
+- src/lib/logger.ts: logger pino com remoção de dados sensíveis.
+- src/lib/refresh-cookie.ts: cookie HttpOnly, SameSite=Strict e Secure em produção.
+- src/middlewares/rate-limit.middleware.ts: limites de login, cadastro e renovação.
+- src/schemas/common.schema.ts: valor monetário com teto de Decimal(15,2) e paginação.
+- tests/: 8 arquivos com 70 testes (autenticação, isolamento entre usuários, transações, dashboard, metas, exportação, HTTP, limite de tentativas e seed).
+- vitest.config.mts e tsconfig.check.json: configuração dos testes e da checagem de tipos.
+- eslint.config.mjs, .prettierrc.json e .prettierignore: lint e formatação.
+- .github/workflows/ci.yml: formatação, lint, tipos, build, testes, auditoria e build das imagens Docker.
+- Dockerfile, .dockerignore, docker-compose.yml e .env.production.example: API, migrations, banco e configuração de produção.
+- frontend/Dockerfile, frontend/.dockerignore e frontend/nginx.conf: frontend e proxy da API na mesma origem.
+- docs/DEPLOY.md: guia de deploy, HTTPS, backup e limitações.
+- frontend/src/App.tsx: rotas com carregamento por página e controle da sessão.
+- frontend/src/pages/: AuthPage, DashboardPage, TransactionsPage (despesas e receitas) e GoalsPage.
+- frontend/src/components/: ConfirmDialog, CurrencyInput, GoalModal, TransactionCharts e category-icons.
+- frontend/src/lib/format.ts: moeda, datas sem deslocamento de fuso e mensagens de erro da API.
+- frontend/src/test-setup.ts, frontend/src/api.test.ts, frontend/src/lib/format.test.ts e testes de CategoryModal, TransactionModal e Modal: 23 testes do frontend.
+
+Arquivos alterados
+- prisma/schema.prisma: modelo RefreshToken.
+- prisma.config.ts: comando de seed.
+- package.json e package-lock.json: scripts (lint, format, test, prisma:deploy, prisma:seed, postinstall), dependências e engines.
+- .env.example e .gitignore: novas variáveis, banco de teste e arquivos de produção ignorados.
+- README.md: reescrito com instalação, comandos, estrutura e rotas.
+- src/app.ts: helmet, CORS com credenciais, logs, cookies, limite de corpo e mensagens do Zod em português.
+- src/server.ts: encerramento ordenado, que para de aceitar requisições antes de fechar o banco.
+- src/config/env.ts: variáveis de sessão, fuso, proxy, logs e limite de tentativas.
+- src/lib/jwt.ts e src/lib/app-error.ts: algoritmo fixo HS256 e causa do erro.
+- src/middlewares/error-handler.middleware.ts: registra erros 500, responde 400 para JSON inválido e 413 para corpo grande.
+- src/middlewares/ensure-authenticated.middleware.ts: usa a verificação centralizada do token.
+- src/services/auth.service.ts: login sem revelar e-mails pelo tempo de resposta, renovação com rotação e detecção de reuso.
+- src/services/transaction.service.ts: filtro por tipo, exportação em lotes com cursor e edição que não congela categoria desativada.
+- src/services/dashboard.service.ts: totais por categoria e por origem, com soma em Decimal.
+- src/services/goal.service.ts: progresso das metas e expiração das vencidas.
+- src/services/health.service.ts e user.service.ts: erro 503 sem banco e custo do bcrypt compartilhado.
+- src/controllers, src/routes e src/schemas: rotas de renovação, saída e totais por origem; schemas com limites e mensagens claras.
+- frontend/index.html, frontend/package.json, frontend/tsconfig.json e frontend/vite.config.ts: documento válido, scripts, tipos e testes.
+- frontend/src/main.tsx: reduzido a ponto de entrada; as telas foram para pages e components.
+- frontend/src/api.ts: token só em memória, renovação única compartilhada e aviso de sessão expirada.
+- frontend/src/types.ts, style.css e components existentes: tipos novos, rolagem estável, acessibilidade e correções.
+- frontend/src/components/Modal.tsx: fecha com Esc, trava a rolagem da página e remove o desfoque de fundo, que deixava a rolagem lenta.
+
+Regras preservadas
+- Categorias com userId nulo são globais; as pessoais seguem isoladas por usuário.
+- Todo acesso a dados do usuário filtra por userId.
+- Tipo da transação igual ao tipo da categoria; categorias são desativadas, não apagadas.
+- Valores em Decimal(15,2), positivos, com CHECK no banco.
+- Lançamentos guardam o dia do calendário à meia-noite UTC.
+- CSV neutraliza fórmulas de planilha.
+
+Mudanças de comportamento
+- JWT_EXPIRES_IN foi substituída por ACCESS_TOKEN_EXPIRES_IN (padrão 15m).
+- A exportação usa CSV por padrão e não aceita mais page e limit.
+- O card "Saldo total" passou a se chamar "Resultado do mês".
+- A migration 20261105120000_add_refresh_tokens precisa ser aplicada (npm run prisma:deploy), e o seed deve ser rodado (npm run prisma:seed).
+
+Validação executada
+- npm run format:check: passou.
+- npm run lint: passou.
+- npm run check: passou.
+- npm run build: passou.
+- npm test (banco finn_test): 8 arquivos, 70 testes passaram.
+- npm test --prefix frontend: 5 arquivos, 23 testes passaram.
+- npm run build --prefix frontend: passou.
+- npm audit --omit=dev na API e no frontend: zero vulnerabilidades.
+- Fluxo completo no navegador contra a API compilada: cadastro, login, receita, despesa, edição, exclusão, categorias, metas, exportação CSV, sessão expirada e saída.
+- Simulação de produção com a API compilada e dependências de produção: saúde, JSON inválido, cookie Secure e limite de tentativas.
+- Reversão proposital de 11 correções, com os testes detectando todas.
+
+Não verificado
+- Build das imagens Docker, nginx e workflow do GitHub Actions: o Docker não está instalado nesta máquina.
+- Layout em celular real e a rolagem do modal de categorias no navegador do usuário.
+- Deploy em servidor com HTTPS.

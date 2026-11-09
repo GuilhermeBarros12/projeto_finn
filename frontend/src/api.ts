@@ -1,3 +1,67 @@
-import axios from "axios";
-export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:3333/api" });
-api.interceptors.request.use((config) => { const token = sessionStorage.getItem("finn.token"); if (token) config.headers.Authorization = `Bearer ${token}`; return config; });
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
+
+const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:3333/api";
+
+export const api = axios.create({ baseURL, withCredentials: true });
+
+interface RetriableRequest extends InternalAxiosRequestConfig {
+  retried?: boolean;
+}
+
+// Fica em memória de propósito: um script injetado não encontra o token no navegador.
+let accessToken: string | null = null;
+let refreshing: Promise<string> | null = null;
+let onSessionExpired: () => void = () => undefined;
+
+export const setAccessToken = (token: string): void => {
+  accessToken = token;
+};
+
+export const clearSession = (): void => {
+  accessToken = null;
+};
+
+export const setSessionExpiredHandler = (handler: () => void): void => {
+  onSessionExpired = handler;
+};
+
+/** Várias requisições podem expirar juntas; todas aguardam a mesma renovação. */
+export const refreshSession = (): Promise<string> => {
+  refreshing ??= axios
+    .post<{ token: string }>(`${baseURL}/auth/refresh`, null, { withCredentials: true })
+    .then((response) => {
+      accessToken = response.data.token;
+      return response.data.token;
+    })
+    .finally(() => {
+      refreshing = null;
+    });
+
+  return refreshing;
+};
+
+api.interceptors.request.use((config) => {
+  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  return config;
+});
+
+api.interceptors.response.use(undefined, async (error: AxiosError) => {
+  const request = error.config as RetriableRequest | undefined;
+  const isAuthRoute = request?.url?.startsWith("/auth/") ?? false;
+
+  if (error.response?.status !== 401 || !request || request.retried || isAuthRoute) {
+    throw error;
+  }
+
+  request.retried = true;
+
+  try {
+    await refreshSession();
+  } catch {
+    clearSession();
+    onSessionExpired();
+    throw error;
+  }
+
+  return api(request);
+});

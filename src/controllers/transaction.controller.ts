@@ -11,12 +11,18 @@ export class TransactionController {
   constructor(private readonly transactionService = new TransactionService()) {}
 
   create = async (request: Request, response: Response): Promise<void> => {
-    const transaction = await this.transactionService.create(request.userId!, createTransactionSchema.parse(request.body));
+    const transaction = await this.transactionService.create(
+      request.userId!,
+      createTransactionSchema.parse(request.body),
+    );
     response.status(201).json({ transaction });
   };
 
   list = async (request: Request, response: Response): Promise<void> => {
-    const result = await this.transactionService.list(request.userId!, transactionListSchema.parse(request.query));
+    const result = await this.transactionService.list(
+      request.userId!,
+      transactionListSchema.parse(request.query),
+    );
     response.status(200).json(result);
   };
 
