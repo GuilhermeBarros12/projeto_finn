@@ -1,0 +1,56 @@
+# Sobe o Finn completo. Copie .env.production.example para .env.production e preencha.
+#   docker compose --env-file .env.production up -d --build
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-finn_db}
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finn} -d ${POSTGRES_DB:-finn_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finn}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finn_db}?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-finn}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-finn_db}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:?defina FRONTEND_ORIGIN}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      # Um salto: o nginx do serviço web. Some 1 para cada proxy à frente dele.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:

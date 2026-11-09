@@ -8,8 +8,22 @@
 }
 
 @layer base {
-  body { @apply min-h-screen bg-finn-navy font-sans text-slate-900 antialiased; }
-  button, input, select { font: inherit; }
-  button { @apply cursor-pointer; }
-  button:disabled { @apply cursor-not-allowed; }
+  /* Reserva o espaço da barra de rolagem: travar a página num modal não faz o layout pular. */
+  html {
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply min-h-screen bg-finn-navy font-sans text-slate-900 antialiased;
+  }
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+  button {
+    @apply cursor-pointer;
+  }
+  button:disabled {
+    @apply cursor-not-allowed;
+  }
 }

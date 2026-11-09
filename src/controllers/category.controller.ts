@@ -12,7 +12,10 @@ export class CategoryController {
   };
 
   create = async (request: Request, response: Response): Promise<void> => {
-    const category = await this.categoryService.create(request.userId!, createCategorySchema.parse(request.body));
+    const category = await this.categoryService.create(
+      request.userId!,
+      createCategorySchema.parse(request.body),
+    );
     response.status(201).json({ category });
   };
 

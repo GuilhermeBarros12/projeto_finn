@@ -1,15 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
-import jwt from "jsonwebtoken";
-import { env } from "../config/env";
 import { AppError } from "../lib/app-error";
+import { verifyAccessToken } from "../lib/jwt";
 
 export const ensureAuthenticated = (
   request: Request,
   _response: Response,
   next: NextFunction,
 ): void => {
-  const authorization = request.headers.authorization;
-  const [scheme, token] = authorization?.split(" ") ?? [];
+  const [scheme, token] = request.headers.authorization?.split(" ") ?? [];
 
   if (scheme?.toLowerCase() !== "bearer" || !token) {
     next(new AppError("Token de autenticação ausente ou inválido.", 401));
@@ -17,16 +15,16 @@ export const ensureAuthenticated = (
   }
 
   try {
-    const payload = jwt.verify(token, env.JWT_SECRET);
-    const userId = typeof payload === "object" && typeof payload.sub === "string" ? payload.sub : undefined;
+    const userId = verifyAccessToken(token);
 
     if (!userId) {
-      throw new AppError("Token de autenticação inválido.", 401);
+      next(new AppError("Token de autenticação inválido.", 401));
+      return;
     }
 
     request.userId = userId;
     next();
-  } catch (error) {
-    next(error instanceof AppError ? error : new AppError("Token de autenticação inválido ou expirado.", 401));
+  } catch {
+    next(new AppError("Token de autenticação inválido ou expirado.", 401));
   }
 };

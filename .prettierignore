@@ -1,0 +1,10 @@
+node_modules
+dist
+generated
+package-lock.json
+frontend/package-lock.json
+prisma/migrations
+docs/commits
+.postman
+postman
+.claude

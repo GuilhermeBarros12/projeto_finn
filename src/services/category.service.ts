@@ -13,12 +13,18 @@ export class CategoryService {
   private async generateCode(userId: string): Promise<string> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const code = randomBytes(5).toString("hex").toUpperCase();
-      const existing = await prisma.category.findFirst({ where: { userId, code }, select: { id: true } });
+      const existing = await prisma.category.findFirst({
+        where: { userId, code },
+        select: { id: true },
+      });
 
       if (!existing) return code;
     }
 
-    throw new AppError("Não foi possível gerar um código de categoria único. Tente novamente.", 503);
+    throw new AppError(
+      "Não foi possível gerar um código de categoria único. Tente novamente.",
+      503,
+    );
   }
 
   async list(userId: string): Promise<Category[]> {

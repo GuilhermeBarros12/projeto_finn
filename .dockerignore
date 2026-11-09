@@ -1,0 +1,15 @@
+node_modules
+dist
+generated
+frontend
+tests
+docs
+coverage
+postman
+.postman
+.claude
+.git
+.github
+.env
+.env.*
+!.env.example

@@ -8,3 +8,4 @@ const dashboardController = new DashboardController();
 dashboardRoutes.use(ensureAuthenticated);
 dashboardRoutes.get("/summary", dashboardController.summary);
 dashboardRoutes.get("/by-category", dashboardController.byCategory);
+dashboardRoutes.get("/by-origin", dashboardController.byOrigin);

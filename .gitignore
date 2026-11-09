@@ -1,6 +1,12 @@
 node_modules
 dist
+coverage
 # Keep environment variables out of version control
 .env
+.env.production
 
 /generated/prisma
+
+# Claude Code: preferências locais e material de apoio
+.claude/settings.local.json
+.claude/*.zip
