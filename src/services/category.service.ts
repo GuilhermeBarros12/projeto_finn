@@ -27,9 +27,10 @@ export class CategoryService {
     );
   }
 
-  async list(userId: string): Promise<Category[]> {
+  /** Desativadas só servem para ler o histórico; nunca para novos lançamentos ou metas. */
+  async list(userId: string, includeInactive = false): Promise<Category[]> {
     return prisma.category.findMany({
-      where: { status: true, OR: [{ userId: null }, { userId }] },
+      where: { ...(includeInactive ? {} : { status: true }), OR: [{ userId: null }, { userId }] },
       orderBy: [{ userId: "asc" }, { name: "asc" }],
     });
   }

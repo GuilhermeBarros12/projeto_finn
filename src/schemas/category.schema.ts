@@ -7,4 +7,11 @@ export const createCategorySchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "A cor deve usar o formato hexadecimal #FFFFFF."),
 });
 
+export const categoryListSchema = z.object({
+  includeInactive: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
+});
+
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;

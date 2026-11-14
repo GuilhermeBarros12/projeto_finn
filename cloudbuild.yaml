@@ -1,0 +1,16 @@
+# Constrói as duas imagens da API no Cloud Build e as envia ao Artifact Registry:
+#   gcloud builds submit --config cloudbuild.yaml
+# A região padrão é São Paulo; para outra, acrescente --substitutions=_REGION=<região>.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "--target", "runtime", "-t", "${_IMAGE}/api:latest", "."]
+  - name: gcr.io/cloud-builders/docker
+    args: ["build", "--target", "migrate", "-t", "${_IMAGE}/migrate:latest", "."]
+images:
+  - "${_IMAGE}/api:latest"
+  - "${_IMAGE}/migrate:latest"
+substitutions:
+  _REGION: southamerica-east1
+  _IMAGE: ${_REGION}-docker.pkg.dev/${PROJECT_ID}/finn
+options:
+  dynamicSubstitutions: true

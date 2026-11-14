@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import type { User } from "../../generated/prisma/client";
+import { env } from "../config/env";
 import { AppError } from "../lib/app-error";
 import { prisma } from "../lib/prisma";
 import type { CreateUserInput } from "../schemas/auth.schema";
@@ -18,6 +19,10 @@ export const toPublicUser = (user: User): PublicUser => ({
 
 export class UserService {
   async create({ name, email, password }: CreateUserInput): Promise<PublicUser> {
+    if (env.SIGNUP_ALLOWED_EMAILS && !env.SIGNUP_ALLOWED_EMAILS.includes(email)) {
+      throw new AppError("O cadastro está fechado para este e-mail.", 403);
+    }
+
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {

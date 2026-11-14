@@ -1,6 +1,8 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 
-const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:3333/api";
+// Em produção a tela e a API ficam na mesma origem (nginx ou repasse da Vercel), como o cookie exige.
+const baseURL =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "/api" : "http://localhost:3333/api");
 
 export const api = axios.create({ baseURL, withCredentials: true });
 
@@ -57,9 +59,13 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
 
   try {
     await refreshSession();
-  } catch {
-    clearSession();
-    onSessionExpired();
+  } catch (refreshError) {
+    // Rede fora ou servidor com problema não encerram a sessão: o cookie segue válido.
+    const isTemporary = axios.isAxiosError(refreshError) && refreshError.response?.status !== 401;
+    if (!isTemporary) {
+      clearSession();
+      onSessionExpired();
+    }
     throw error;
   }
 

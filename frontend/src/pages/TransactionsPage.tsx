@@ -4,7 +4,7 @@ import { api } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { TransactionModal } from "../components/TransactionModal";
-import { apiErrorMessage, formatDate, money } from "../lib/format";
+import { apiErrorMessage, currentMonth, formatDate, money } from "../lib/format";
 import type {
   Category,
   CategoryTotal,
@@ -53,9 +53,8 @@ interface TransactionsPageProps {
 }
 
 export default function TransactionsPage({ type, categories }: TransactionsPageProps) {
-  const now = new Date();
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [year, setYear] = useState(String(now.getFullYear()));
+  const [month, setMonth] = useState(() => String(currentMonth().month));
+  const [year, setYear] = useState(() => String(currentMonth().year));
   const [categoryId, setCategoryId] = useState("");
   const [origin, setOrigin] = useState("");
   const [page, setPage] = useState(1);
@@ -67,6 +66,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
   const [editing, setEditing] = useState<Transaction>();
@@ -110,6 +110,11 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
         setByOrigin(originTotals.data);
       } catch (requestError) {
         if (!controller.signal.aborted) {
+          // Limpa o resultado anterior: ele seria lido como se fosse do filtro novo.
+          setTransactions([]);
+          setMeta(null);
+          setByCategory([]);
+          setByOrigin({ account: 0, creditCard: 0 });
           setError(apiErrorMessage(requestError, "Não foi possível carregar os lançamentos."));
         }
       } finally {
@@ -130,7 +135,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
 
   const exportCsv = async () => {
     setExporting(true);
-    setError("");
+    setExportError("");
 
     try {
       const response = await api.get<Blob>("/exports/transactions", {
@@ -139,7 +144,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
       });
       downloadBlob(response.data, `finn-${text.title.toLowerCase()}-${year}-${month}.csv`);
     } catch (requestError) {
-      setError(apiErrorMessage(requestError, "Não foi possível exportar."));
+      setExportError(apiErrorMessage(requestError, "Não foi possível exportar."));
     } finally {
       setExporting(false);
     }
@@ -215,7 +220,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
             .filter((category) => category.type === type)
             .map((category) => (
               <option value={category.id} key={category.id}>
-                {category.name}
+                {category.status ? category.name : `${category.name} (desativada)`}
               </option>
             ))}
         </select>
@@ -239,8 +244,22 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
         </p>
       )}
       {error && (
-        <p role="alert" className="mt-4 rounded-2xl bg-rose-50 px-5 py-4 text-sm text-rose-700">
+        <div
+          role="alert"
+          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-rose-50 px-5 py-4 text-sm text-rose-700"
+        >
           {error}
+          <button
+            onClick={reload}
+            className="rounded-full bg-white px-4 py-2 font-semibold transition hover:bg-rose-100"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      )}
+      {exportError && (
+        <p role="alert" className="mt-4 rounded-2xl bg-rose-50 px-5 py-4 text-sm text-rose-700">
+          {exportError}
         </p>
       )}
 
@@ -248,7 +267,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
         <div className="mt-6 rounded-3xl bg-white p-10 text-center text-slate-500">
           Carregando lançamentos…
         </div>
-      ) : transactions.length === 0 ? (
+      ) : error ? null : transactions.length === 0 ? (
         <div className="mt-6 rounded-3xl bg-white p-10 text-center text-slate-500">
           {text.empty}
         </div>

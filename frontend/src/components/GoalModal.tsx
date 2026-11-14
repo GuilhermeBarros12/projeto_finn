@@ -26,10 +26,17 @@ export function GoalModal({ categories, initial, onClose, onSaved }: GoalModalPr
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const expenseCategories = useMemo(
-    () => categories.filter((category) => category.type === "EXPENSE"),
-    [categories],
-  );
+  const expenseCategories = useMemo(() => {
+    const active = categories.filter((category) => category.type === "EXPENSE" && category.status);
+    const current = initial?.category;
+
+    // Uma categoria desativada some da lista, mas segue válida nesta meta.
+    if (current && !active.some(({ id }) => id === current.id)) {
+      return [...active, { id: current.id, name: `${current.name} (desativada)` }];
+    }
+
+    return active;
+  }, [categories, initial]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

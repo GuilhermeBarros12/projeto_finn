@@ -50,8 +50,14 @@ export interface Goal {
   dueDate: string;
   status: GoalStatus;
   categoryId: string | null;
+  category: { id: string; name: string; status: boolean } | null;
   currentValue: number;
   progress: number;
+}
+
+export interface AgentMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export interface PageMeta {

@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { moneySchema, paginationFields } from "./common.schema";
+import { calendarDateSchema, moneySchema, paginationFields } from "./common.schema";
 
 const fields = {
   title: z.string().trim().min(1).max(120),
   type: z.enum(["SAVINGS", "SPENDING_LIMIT"]),
   targetValue: moneySchema,
-  dueDate: z.coerce.date(),
+  dueDate: calendarDateSchema,
   status: z.enum(["IN_PROGRESS", "COMPLETED", "EXPIRED"]),
   categoryId: z.uuid().nullable(),
 };

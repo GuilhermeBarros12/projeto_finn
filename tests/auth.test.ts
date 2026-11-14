@@ -1,6 +1,6 @@
 import jwt from "jsonwebtoken";
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { app } from "../src/app";
 import { prisma } from "../src/lib/prisma";
 import { api, createUser, refreshCookieFrom, resetDatabase } from "./helpers";
@@ -169,5 +169,106 @@ describe("renovação de sessão", () => {
 
     expect(logout.status).toBe(204);
     expect(replay.status).toBe(401);
+  });
+});
+
+describe("regressões da auditoria de sessão", () => {
+  const refresh = (cookie: string) => request(app).post("/api/auth/refresh").set("Cookie", cookie);
+  const cookiesOf = (response: request.Response) =>
+    (response.headers["set-cookie"] as unknown as string[] | undefined) ?? [];
+  const activeTokens = (userId: string) =>
+    prisma.refreshToken.count({ where: { userId, rotatedAt: null } });
+
+  it("não recria a sessão se o logout acontece durante a renovação (AUTH-01)", async () => {
+    const user = await createUser();
+    const original = prisma.refreshToken.findUnique.bind(prisma.refreshToken);
+    const spy = vi.spyOn(prisma.refreshToken, "findUnique").mockImplementationOnce((async (
+      args: never,
+    ) => {
+      const found = await original(args);
+      spy.mockRestore();
+      await request(app).post("/api/auth/logout").set("Cookie", user.cookie);
+      return found;
+    }) as never);
+
+    const response = await refresh(user.cookie);
+
+    expect(response.status).toBe(401);
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("nunca sobra token depois de renovação e logout em paralelo (AUTH-01)", async () => {
+    const user = await createUser();
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const login = await request(app)
+        .post("/api/auth/login")
+        .send({ email: user.email, password: user.password });
+      const cookie = refreshCookieFrom(login);
+
+      await Promise.all([
+        attempt % 2 === 0
+          ? refresh(cookie)
+          : request(app).post("/api/auth/logout").set("Cookie", cookie),
+        attempt % 2 === 0
+          ? request(app).post("/api/auth/logout").set("Cookie", cookie)
+          : refresh(cookie),
+      ]);
+
+      const familyCount = await prisma.refreshToken.count({ where: { userId: user.id } });
+      await prisma.refreshToken.deleteMany({
+        where: { userId: user.id, rotatedAt: { not: null } },
+      });
+      const remaining = await activeTokens(user.id);
+
+      // O token original de createUser é o único que pode sobrar.
+      expect(remaining, `rodada ${attempt}, ${familyCount} tokens`).toBe(1);
+    }
+  });
+
+  it("gera um único sucessor com 10 renovações simultâneas (AUTH-02)", async () => {
+    const user = await createUser();
+
+    const responses = await Promise.all(Array.from({ length: 10 }, () => refresh(user.cookie)));
+
+    expect(responses.map((response) => response.status)).toEqual(Array(10).fill(200));
+    expect(responses.filter((response) => cookiesOf(response).length > 0)).toHaveLength(1);
+    expect(await activeTokens(user.id)).toBe(1);
+    for (const response of responses) {
+      expect((await api(response.body.token).get("/api/categories")).status).toBe(200);
+    }
+  });
+
+  it("não emite novo token ao repetir dentro da tolerância (AUTH-02)", async () => {
+    const user = await createUser();
+
+    await refresh(user.cookie);
+    const repeated = await refresh(user.cookie);
+
+    expect(repeated.status).toBe(200);
+    expect(cookiesOf(repeated)).toEqual([]);
+    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(2);
+  });
+
+  it("mantém o cookie quando a renovação falha por erro do servidor (AUTH-03)", async () => {
+    const user = await createUser();
+    const spy = vi
+      .spyOn(prisma.refreshToken, "findUnique")
+      .mockRejectedValueOnce(new Error("banco fora"));
+
+    const failed = await refresh(user.cookie);
+    spy.mockRestore();
+    const retried = await refresh(user.cookie);
+
+    expect(failed.status).toBe(500);
+    expect(cookiesOf(failed)).toEqual([]);
+    expect(retried.status).toBe(200);
+  });
+
+  it("apaga o cookie quando a sessão é inválida (AUTH-03)", async () => {
+    const response = await refresh("finn_refresh=desconhecido");
+
+    expect(response.status).toBe(401);
+    expect(cookiesOf(response).join(";")).toContain("Expires=Thu, 01 Jan 1970");
   });
 });

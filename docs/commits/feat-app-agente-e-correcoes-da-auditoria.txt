@@ -1,0 +1,45 @@
+Adicionar o assistente financeiro e corrigir os achados da auditoria
+feat-app-agente-e-correcoes-da-auditoria
+
+Resumo
+Cria o assistente de IA que responde com base nos dados do usuário (somente leitura, rascunhos e sugestões) e corrige os 19 achados confirmados da auditoria externa: sessão, metas, exportação, datas, validação de entrada, configuração e proteção do banco de testes. O assistente e as correções compartilham arquivos (env, rotas, App, tipos), por isso seguem juntos.
+
+Dependências adicionadas
+- @anthropic-ai/sdk: cliente da API da Anthropic usado pelo assistente.
+
+Arquivos criados
+- src/lib/agent-model.ts, src/services/agent.service.ts, src/services/agent-tools.ts, src/schemas/agent.schema.ts, src/controllers/agent.controller.ts, src/routes/agent.routes.ts: assistente com 4 ferramentas de leitura, no máximo 8 rodadas e limite por usuário.
+- src/config/database-url.ts: monta o DATABASE_URL a partir de POSTGRES_* com codificação da senha.
+- src/lib/stream-writer.ts: escrita com controle de desconexão na exportação.
+- frontend/src/pages/AssistantPage.tsx: tela do assistente.
+- tests/: agent, agent-rate-limit, fake-model, database-url, env, stream-writer, test-database.
+- frontend/src: App.test, GoalModal.test, AssistantPage.test, DashboardPage.test, GoalsPage.test, TransactionsPage.test.
+
+Arquivos alterados
+- src/services/auth.service.ts e src/controllers/auth.controller.ts: renovação de sessão atômica por família, sem apagar o cookie em falha temporária.
+- src/services/goal.service.ts: progresso das metas em uma consulta em lote, paginação estável, categoria revalidada só quando muda.
+- src/services/category.service.ts, src/schemas/category.schema.ts, src/controllers/category.controller.ts: listagem opcional de categorias desativadas.
+- src/schemas/common.schema.ts, goal.schema.ts, transaction.schema.ts: validação estrita de dinheiro e datas de calendário.
+- src/controllers/export.controller.ts: exportação em streaming que respeita cliente desconectado.
+- src/config/env.ts, src/server.ts, prisma.config.ts, prisma/seed.ts: validação de ambiente mais estrita e aviso de variáveis ignoradas.
+- src/middlewares/rate-limit.middleware.ts e src/routes/index.ts: limite por usuário do assistente e rota nova.
+- tests/global-setup.ts, tests/setup.ts, tests/test-database.ts: trava reforçada contra apagar o banco errado.
+- tests/auth, goals, transactions e isolation: casos novos, incluindo isolamento do assistente.
+- frontend/src/api.ts, App.tsx, AppSidebar.tsx, types.ts, lib/format.ts, pages e components: tratamento de erros temporários, fuso do calendário, paginação de metas e categorias desativadas.
+- .env.example, docker-compose.yml, .github/workflows/ci.yml, frontend/.env.example: variáveis novas e CI sem DATABASE_URL fixo.
+- package.json e package-lock.json: dependência do SDK.
+
+Regras preservadas
+- Todo acesso a dados filtra por userId do token.
+- Datas são dias de calendário em UTC; dinheiro é Decimal(15,2).
+- Categorias são desativadas, nunca apagadas.
+- O assistente só lê dados e não grava nada.
+- Sem ANTHROPIC_API_KEY a API do assistente responde 503.
+
+Validação executada
+- npm run format:check, lint, check e build: sem erros.
+- npm test (API, banco finn_test): 15 arquivos, 168 testes passaram.
+- npm test --prefix frontend: 11 arquivos, 46 testes passaram.
+- npm run build --prefix frontend: concluído.
+- npm audit --omit=dev: 0 vulnerabilidades.
+- O assistente foi testado apenas contra um servidor local falso, nunca com uma chave real da Anthropic.

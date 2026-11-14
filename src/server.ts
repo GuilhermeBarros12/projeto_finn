@@ -1,5 +1,5 @@
 import { app } from "./app";
-import { env } from "./config/env";
+import { env, ignoredVariables } from "./config/env";
 import { logger } from "./lib/logger";
 import { prisma } from "./lib/prisma";
 
@@ -7,6 +7,10 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const server = app.listen(env.PORT, () => {
   logger.info(`API disponível em http://localhost:${env.PORT}/api`);
+
+  for (const [old, replacement] of ignoredVariables) {
+    logger.warn(`${old} não é mais usada e foi ignorada. Use ${replacement}.`);
+  }
 });
 
 const shutdown = (signal: string): void => {

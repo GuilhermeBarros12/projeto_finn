@@ -13,7 +13,7 @@ import {
 let user: TestUser;
 let expense: { id: string };
 let income: { id: string };
-const today = new Date().toISOString().slice(0, 10);
+const today = calendarDay(new Date()).toISOString().slice(0, 10);
 
 const savingsGoal = {
   title: "Reserva",
@@ -176,5 +176,200 @@ describe("metas", () => {
     expect(edit.body.goal).toMatchObject({ title: "Nova", status: "COMPLETED" });
     expect(remove.status).toBe(204);
     expect(await prisma.goal.count()).toBe(0);
+  });
+});
+
+describe("regressões da auditoria de metas", () => {
+  const daysFromToday = (days: number) =>
+    new Date(calendarDay(new Date()).getTime() + days * 86_400_000).toISOString().slice(0, 10);
+
+  it("não conta receita futura como dinheiro guardado (GOAL-01)", async () => {
+    await api(user.token).post("/api/goals").send(savingsGoal);
+    await createTransaction(user.token, income.id, { type: "INCOME", value: 100, date: today });
+    await createTransaction(user.token, income.id, {
+      type: "INCOME",
+      value: 900,
+      date: daysFromToday(1),
+    });
+
+    const list = await api(user.token).get("/api/goals");
+
+    expect(list.body.data[0]).toMatchObject({ currentValue: 100, progress: 10 });
+  });
+
+  it("não conta despesa futura no limite de gasto (GOAL-01)", async () => {
+    await api(user.token).post("/api/goals").send({
+      title: "Mercado",
+      type: "SPENDING_LIMIT",
+      targetValue: 200,
+      dueDate: "2099-12-31",
+      categoryId: expense.id,
+    });
+    await createTransaction(user.token, expense.id, { value: 20, date: today });
+    await createTransaction(user.token, expense.id, { value: 500, date: daysFromToday(5) });
+
+    const list = await api(user.token).get("/api/goals");
+
+    expect(list.body.data[0]).toMatchObject({ currentValue: 20, progress: 10 });
+  });
+
+  it("não conta lançamento depois do prazo (GOAL-01)", async () => {
+    await api(user.token)
+      .post("/api/goals")
+      .send({ ...savingsGoal, dueDate: today });
+    await createTransaction(user.token, income.id, {
+      type: "INCOME",
+      value: 900,
+      date: daysFromToday(1),
+    });
+
+    const list = await api(user.token).get("/api/goals");
+
+    expect(list.body.data[0].currentValue).toBe(0);
+  });
+
+  describe("com categoria desativada (GOAL-02)", () => {
+    const limit = (categoryId: string) => ({
+      title: "Limite",
+      type: "SPENDING_LIMIT",
+      targetValue: 100,
+      dueDate: "2099-12-31",
+      categoryId,
+    });
+
+    const createThenDeactivate = async () => {
+      const goal = await api(user.token).post("/api/goals").send(limit(expense.id));
+      await api(user.token).patch(`/api/categories/${expense.id}/deactivate`);
+      return goal.body.goal.id as string;
+    };
+
+    it("permite editar outros campos e devolve o nome da categoria", async () => {
+      const id = await createThenDeactivate();
+
+      const edit = await api(user.token)
+        .put(`/api/goals/${id}`)
+        .send({ ...limit(expense.id), title: "Novo título", status: "IN_PROGRESS" });
+      const list = await api(user.token).get("/api/goals");
+
+      expect(edit.status).toBe(200);
+      expect(list.body.data[0].category).toEqual({
+        id: expense.id,
+        name: "Mercado",
+        status: false,
+      });
+    });
+
+    it("permite trocar para uma categoria ativa", async () => {
+      const id = await createThenDeactivate();
+      const active = await createCategory(user.token, { name: "Lazer" });
+
+      const edit = await api(user.token)
+        .put(`/api/goals/${id}`)
+        .send({ ...limit(active.id), status: "IN_PROGRESS" });
+
+      expect(edit.status).toBe(200);
+    });
+
+    it("ainda recusa criar meta nova com ela", async () => {
+      await createThenDeactivate();
+
+      const response = await api(user.token).post("/api/goals").send(limit(expense.id));
+
+      expect(response.status).toBe(422);
+    });
+
+    it("ainda recusa trocar para outra categoria desativada", async () => {
+      const other = await createCategory(user.token, { name: "Lazer" });
+      const goal = await api(user.token).post("/api/goals").send(limit(other.id));
+      await api(user.token).patch(`/api/categories/${expense.id}/deactivate`);
+
+      const edit = await api(user.token)
+        .put(`/api/goals/${goal.body.goal.id}`)
+        .send({ ...limit(expense.id), status: "IN_PROGRESS" });
+
+      expect(edit.status).toBe(422);
+    });
+  });
+
+  it.each([99.999, "12,50", null])("recusa targetValue %j", async (targetValue) => {
+    const response = await api(user.token)
+      .post("/api/goals")
+      .send({ ...savingsGoal, targetValue });
+
+    expect(response.status).toBe(400);
+  });
+
+  it.each([null, 0, "2026-02-31", "2026-03-31T23:30:00-03:00"])(
+    "recusa dueDate %j",
+    async (dueDate) => {
+      const response = await api(user.token)
+        .post("/api/goals")
+        .send({ ...savingsGoal, dueDate });
+
+      expect(response.status).toBe(400);
+    },
+  );
+});
+
+describe("metas em quantidade (GOAL-03 e GOAL-04)", () => {
+  it("calcula todas as metas da página em uma única consulta", async () => {
+    const other = await createCategory(user.token, { name: "Lazer" });
+    for (let index = 0; index < 12; index += 1) {
+      await api(user.token)
+        .post("/api/goals")
+        .send(
+          index % 2 === 0
+            ? { ...savingsGoal, title: `Economia ${index}` }
+            : {
+                title: `Limite ${index}`,
+                type: "SPENDING_LIMIT",
+                targetValue: 100,
+                dueDate: "2099-12-31",
+                categoryId: index % 4 === 1 ? expense.id : other.id,
+              },
+        );
+    }
+    await createTransaction(user.token, income.id, { type: "INCOME", value: 300, date: today });
+    await createTransaction(user.token, expense.id, { value: 50, date: today });
+    await createTransaction(user.token, other.id, { value: 20, date: today });
+
+    const raw = vi.spyOn(prisma, "$queryRaw");
+    const aggregate = vi.spyOn(prisma.transaction, "aggregate");
+    const groupBy = vi.spyOn(prisma.transaction, "groupBy");
+    const list = await api(user.token).get("/api/goals?limit=100");
+    const calls = {
+      raw: raw.mock.calls.length,
+      porMeta: aggregate.mock.calls.length + groupBy.mock.calls.length,
+    };
+    raw.mockRestore();
+    aggregate.mockRestore();
+    groupBy.mockRestore();
+
+    const valueOf = (title: string) =>
+      list.body.data.find((goal: { title: string }) => goal.title === title).currentValue;
+    expect(calls).toEqual({ raw: 1, porMeta: 0 });
+    expect(valueOf("Economia 0")).toBe(230);
+    expect(valueOf("Limite 1")).toBe(50);
+    expect(valueOf("Limite 3")).toBe(20);
+  });
+
+  it("pagina sem repetir nem perder metas com o mesmo prazo", async () => {
+    await prisma.goal.createMany({
+      data: Array.from({ length: 101 }, (_, index) => ({
+        userId: user.id,
+        title: `Meta ${index}`,
+        type: "SAVINGS" as const,
+        targetValue: 10,
+        dueDate: new Date("2099-12-31T00:00:00.000Z"),
+      })),
+    });
+
+    const first = await api(user.token).get("/api/goals?limit=100&page=1");
+    const second = await api(user.token).get("/api/goals?limit=100&page=2");
+    const ids = [...first.body.data, ...second.body.data].map((goal: { id: string }) => goal.id);
+
+    expect(first.body.meta.total).toBe(101);
+    expect(second.body.data).toHaveLength(1);
+    expect(new Set(ids).size).toBe(101);
   });
 });

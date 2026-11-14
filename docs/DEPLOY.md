@@ -1,5 +1,7 @@
 # Deploy do Finn
 
+> Prefere não manter um servidor? Veja [Vercel, Cloud Run e Neon](DEPLOY-NUVEM.md).
+
 O projeto sobe com Docker Compose em qualquer servidor Linux com Docker. São quatro serviços:
 
 | Serviço   | Função                                                                     |

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
+import type { Prisma } from "../../generated/prisma/client";
 import { env } from "../config/env";
 import { AppError } from "../lib/app-error";
 import { addUtcDays } from "../lib/dates";
@@ -11,11 +12,16 @@ import { PASSWORD_SALT_ROUNDS, toPublicUser, type PublicUser } from "./user.serv
 /** Abas abertas podem renovar ao mesmo tempo; dentro desta janela não é tentativa de roubo. */
 const ROTATION_GRACE_MS = 30_000;
 
+interface RefreshGrant {
+  token: string;
+  expiresAt: Date;
+}
+
 export interface Session {
   token: string;
   user: PublicUser;
-  refreshToken: string;
-  refreshExpiresAt: Date;
+  /** Nulo na janela de tolerância: o navegador já recebeu o sucessor do token. */
+  refresh: RefreshGrant | null;
 }
 
 const hashToken = (token: string): string => createHash("sha256").update(token).digest("hex");
@@ -23,19 +29,28 @@ const hashToken = (token: string): string => createHash("sha256").update(token).
 // Quem não existe também passa pelo bcrypt, senão o tempo de resposta revelaria os e-mails.
 const dummyHash = bcrypt.hash(randomBytes(16).toString("hex"), PASSWORD_SALT_ROUNDS);
 
+/**
+ * Renovação e logout da mesma sessão rodam um de cada vez. Uma trava de linha não bastaria:
+ * o DELETE do logout não enxerga um token inserido depois que ele começou.
+ */
+const lockFamily = async (tx: Prisma.TransactionClient, familyId: string): Promise<void> => {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${familyId}, 0))`;
+};
+
 export class AuthService {
   private async issueRefreshToken(
+    db: Prisma.TransactionClient,
     userId: string,
     familyId: string,
-  ): Promise<{ refreshToken: string; refreshExpiresAt: Date }> {
-    const refreshToken = randomBytes(32).toString("base64url");
-    const refreshExpiresAt = addUtcDays(new Date(), env.REFRESH_TOKEN_DAYS);
+  ): Promise<RefreshGrant> {
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = addUtcDays(new Date(), env.REFRESH_TOKEN_DAYS);
 
-    await prisma.refreshToken.create({
-      data: { userId, familyId, tokenHash: hashToken(refreshToken), expiresAt: refreshExpiresAt },
+    await db.refreshToken.create({
+      data: { userId, familyId, tokenHash: hashToken(token), expiresAt },
     });
 
-    return { refreshToken, refreshExpiresAt };
+    return { token, expiresAt };
   }
 
   async login({ email, password }: LoginInput): Promise<Session> {
@@ -53,7 +68,7 @@ export class AuthService {
     return {
       token: signAccessToken(user.id),
       user: toPublicUser(user),
-      ...(await this.issueRefreshToken(user.id, randomUUID())),
+      refresh: await this.issueRefreshToken(prisma, user.id, randomUUID()),
     };
   }
 
@@ -61,31 +76,48 @@ export class AuthService {
     const invalidSession = new AppError("Sessão inválida ou expirada.", 401);
     if (!token) throw invalidSession;
 
-    const stored = await prisma.refreshToken.findUnique({
-      where: { tokenHash: hashToken(token) },
-      include: { user: true },
+    const tokenHash = hashToken(token);
+    const found = await prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      select: { familyId: true },
     });
+    if (!found) throw invalidSession;
 
-    if (!stored || stored.expiresAt <= new Date()) throw invalidSession;
+    const renewal = await prisma.$transaction(async (tx) => {
+      await lockFamily(tx, found.familyId);
 
-    const reused =
-      stored.rotatedAt !== null && Date.now() - stored.rotatedAt.getTime() > ROTATION_GRACE_MS;
+      // Relê depois da trava: um logout pode ter apagado o token nesse intervalo.
+      const stored = await tx.refreshToken.findUnique({
+        where: { tokenHash },
+        include: { user: true },
+      });
+      if (!stored || stored.expiresAt <= new Date()) return null;
 
-    if (reused) {
+      if (stored.rotatedAt === null) {
+        await tx.refreshToken.update({
+          where: { id: stored.id },
+          data: { rotatedAt: new Date() },
+        });
+        const refresh = await this.issueRefreshToken(tx, stored.userId, stored.familyId);
+        return { user: stored.user, refresh };
+      }
+
+      // Dentro da tolerância entrega só o token de acesso, para nunca bifurcar a sessão.
+      if (Date.now() - stored.rotatedAt.getTime() <= ROTATION_GRACE_MS) {
+        return { user: stored.user, refresh: null };
+      }
+
       // Token antigo voltando é sinal de vazamento: derruba toda a cadeia dessa sessão.
-      await prisma.refreshToken.deleteMany({ where: { familyId: stored.familyId } });
-      throw invalidSession;
-    }
-
-    await prisma.refreshToken.updateMany({
-      where: { id: stored.id, rotatedAt: null },
-      data: { rotatedAt: new Date() },
+      await tx.refreshToken.deleteMany({ where: { familyId: stored.familyId } });
+      return null;
     });
+
+    if (!renewal) throw invalidSession;
 
     return {
-      token: signAccessToken(stored.userId),
-      user: toPublicUser(stored.user),
-      ...(await this.issueRefreshToken(stored.userId, stored.familyId)),
+      token: signAccessToken(renewal.user.id),
+      user: toPublicUser(renewal.user),
+      refresh: renewal.refresh,
     };
   }
 
@@ -96,7 +128,11 @@ export class AuthService {
       where: { tokenHash: hashToken(token) },
       select: { familyId: true },
     });
+    if (!stored) return;
 
-    if (stored) await prisma.refreshToken.deleteMany({ where: { familyId: stored.familyId } });
+    await prisma.$transaction(async (tx) => {
+      await lockFamily(tx, stored.familyId);
+      await tx.refreshToken.deleteMany({ where: { familyId: stored.familyId } });
+    });
   }
 }

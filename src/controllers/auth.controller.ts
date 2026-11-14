@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { AppError } from "../lib/app-error";
 import { clearRefreshCookie, REFRESH_COOKIE, setRefreshCookie } from "../lib/refresh-cookie";
 import { loginSchema } from "../schemas/auth.schema";
 import { AuthService, type Session } from "../services/auth.service";
@@ -9,7 +10,9 @@ const readRefreshToken = (request: Request): string | undefined => {
 };
 
 const respondWithSession = (response: Response, session: Session): void => {
-  setRefreshCookie(response, session.refreshToken, session.refreshExpiresAt);
+  if (session.refresh) {
+    setRefreshCookie(response, session.refresh.token, session.refresh.expiresAt);
+  }
   response.status(200).json({ token: session.token, user: session.user });
 };
 
@@ -25,7 +28,8 @@ export class AuthController {
     try {
       respondWithSession(response, await this.authService.refresh(readRefreshToken(request)));
     } catch (error) {
-      clearRefreshCookie(response);
+      // Só descarta o cookie se a sessão acabou; numa falha temporária ele ainda serve.
+      if (error instanceof AppError && error.statusCode === 401) clearRefreshCookie(response);
       throw error;
     }
   };

@@ -1,0 +1,17 @@
+Adicionar CLAUDE.md e as skills do projeto
+chore-claude-adicionar-skills-e-claude-md
+
+Resumo
+Documenta para o Claude Code como o projeto funciona (comandos, arquitetura e regras transversais) e versiona as skills usadas nas entregas.
+
+Arquivos criados
+- CLAUDE.md: comandos, arquitetura da API, regras transversais, frontend, deploy e convenções do repositório.
+- .claude/skills/frontend-design: skill de design de interface.
+- .claude/skills/registrar-commit: gera o registro de cada entrega em docs/commits.
+- .claude/skills/verificar-alteracao: escolhe as checagens de uma mudança.
+
+Regras preservadas
+- .claude/settings.local.json e .claude/*.zip continuam fora do Git.
+
+Validação executada
+- git status: somente arquivos de documentação e configuração de skills, sem código da aplicação.

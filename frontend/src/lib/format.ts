@@ -10,11 +10,16 @@ export const money = (value: number | string): string =>
 export const formatDate = (value: string): string =>
   new Date(value).toLocaleDateString("pt-BR", { timeZone: "UTC" });
 
-/** Hoje no calendário do usuário; `toISOString` daria amanhã depois das 21h em Brasília. */
-export const todayInput = (now = new Date()): string => {
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
+/** O mesmo fuso que a API usa em APP_TIMEZONE, para tela e servidor concordarem sobre "hoje". */
+export const APP_TIMEZONE: string = import.meta.env.VITE_APP_TIMEZONE ?? "America/Sao_Paulo";
+
+/** Hoje no calendário do app; `toISOString` daria amanhã depois das 21h em Brasília. */
+export const todayInput = (now = new Date(), timeZone = APP_TIMEZONE): string =>
+  new Intl.DateTimeFormat("en-CA", { timeZone }).format(now);
+
+export const currentMonth = (now = new Date(), timeZone = APP_TIMEZONE) => {
+  const [year, month] = todayInput(now, timeZone).split("-").map(Number);
+  return { month: month as number, year: year as number };
 };
 
 export const toDateInput = (value: string): string => value.slice(0, 10);

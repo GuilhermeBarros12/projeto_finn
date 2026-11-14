@@ -52,9 +52,17 @@ export function CategoryModal({ categories, onClose, onChanged }: CategoryModalP
       form.reset();
       setColor(colors[0]);
       setIcon("Utensils");
-      await onChanged();
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Não foi possível criar a categoria."));
+      setSaving(false);
+      return;
+    }
+
+    // A criação já deu certo: uma falha na lista não pode parecer erro de criação.
+    try {
+      await onChanged();
+    } catch {
+      setError("A categoria foi criada, mas a lista não atualizou. Feche e abra esta janela.");
     } finally {
       setSaving(false);
     }
@@ -63,9 +71,15 @@ export function CategoryModal({ categories, onClose, onChanged }: CategoryModalP
   const disable = async (id: string) => {
     try {
       await api.patch(`/categories/${id}/deactivate`);
-      await onChanged();
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Não foi possível desativar esta categoria."));
+      return;
+    }
+
+    try {
+      await onChanged();
+    } catch {
+      setError("A categoria foi desativada, mas a lista não atualizou. Feche e abra esta janela.");
     }
   };
 
@@ -163,6 +177,9 @@ export function CategoryModal({ categories, onClose, onChanged }: CategoryModalP
               </span>
               <span className="min-w-0 flex-1 truncate text-sm font-semibold">{category.name}</span>
               <span className="hidden text-xs text-slate-400 sm:block">{category.code}</span>
+              {!category.status && (
+                <span className="text-xs font-semibold text-slate-400">Desativada</span>
+              )}
               {category.status && category.userId !== null && (
                 <button
                   className="rounded-full px-3 py-1 text-xs font-semibold text-rose-600 transition hover:bg-rose-100"

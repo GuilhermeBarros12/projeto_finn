@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type CategoryType } from "../generated/prisma/client";
+import { resolveDatabaseUrl } from "../src/config/database-url";
 
 interface GlobalCategory {
   code: string;
@@ -76,7 +77,7 @@ export const seedGlobalCategories = async (client: PrismaClient): Promise<void> 
 };
 
 const main = async (): Promise<void> => {
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = resolveDatabaseUrl(process.env);
   if (!connectionString) throw new Error("DATABASE_URL não definida.");
 
   const client = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
