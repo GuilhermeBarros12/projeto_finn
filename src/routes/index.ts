@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { agentRoutes } from "./agent.routes";
 import { authRoutes } from "./auth.routes";
 import { categoriesRoutes } from "./categories.routes";
 import { dashboardRoutes } from "./dashboard.routes";
@@ -18,3 +19,4 @@ routes.use("/transactions", transactionsRoutes);
 routes.use("/dashboard", dashboardRoutes);
 routes.use("/goals", goalsRoutes);
 routes.use("/exports", exportsRoutes);
+routes.use("/agent", agentRoutes);

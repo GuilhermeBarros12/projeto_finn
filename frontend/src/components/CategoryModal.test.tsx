@@ -38,3 +38,35 @@ describe("CategoryModal", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível criar");
   });
 });
+
+describe("CategoryModal com falhas e desativadas", () => {
+  const inactive = {
+    id: "c2",
+    userId: "u1",
+    code: "ANT",
+    name: "Antiga",
+    type: "EXPENSE" as const,
+    icon: "Tag",
+    color: "#000000",
+    status: false,
+  };
+
+  it("não trata como erro de criação a falha ao recarregar a lista (UI-03)", async () => {
+    post.mockResolvedValue({ data: { category: { code: "XYZ789" } } });
+    const onChanged = vi.fn().mockRejectedValue(new Error("lista falhou"));
+    render(<CategoryModal categories={[]} onClose={vi.fn()} onChanged={onChanged} />);
+
+    await userEvent.type(screen.getByLabelText("Nome da categoria"), "Pets");
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar categoria" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("foi criada");
+    expect(screen.getByRole("status")).toHaveTextContent("XYZ789");
+  });
+
+  it("mostra a categoria desativada sem o botão de desativar (UI-04)", () => {
+    render(<CategoryModal categories={[inactive]} onClose={vi.fn()} onChanged={vi.fn()} />);
+
+    expect(screen.getByText("Desativada")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Desativar" })).toBeNull();
+  });
+});

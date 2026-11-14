@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosHeaders } from "axios";
 import { describe, expect, it } from "vitest";
-import { apiErrorMessage, formatDate, money, todayInput } from "./format";
+import { apiErrorMessage, currentMonth, formatDate, money, todayInput } from "./format";
 
 const httpError = (status: number, data: unknown) =>
   new AxiosError("falha", "ERR", undefined, undefined, {
@@ -52,5 +52,20 @@ describe("mensagens de erro", () => {
 describe("moeda", () => {
   it("formata em reais", () => {
     expect(money(1234.5).replace(/\s/g, " ")).toBe("R$ 1.234,50");
+  });
+});
+
+describe("fuso do app (DATE-02)", () => {
+  // 01/12 às 01h em UTC ainda é 30/11 em Brasília e já é 01/12 em Tóquio.
+  const virada = new Date("2026-12-01T01:00:00.000Z");
+
+  it("usa o fuso do app, não o do navegador", () => {
+    expect(todayInput(virada)).toBe("2026-11-30");
+    expect(currentMonth(virada)).toEqual({ month: 11, year: 2026 });
+  });
+
+  it("muda de mês quando o fuso configurado muda", () => {
+    expect(todayInput(virada, "Asia/Tokyo")).toBe("2026-12-01");
+    expect(currentMonth(virada, "Asia/Tokyo")).toEqual({ month: 12, year: 2026 });
   });
 });

@@ -4,7 +4,7 @@ import { api } from "../api";
 import { RecentTransactions } from "../components/RecentTransactions";
 import { StatCard } from "../components/StatCard";
 import { TransactionModal } from "../components/TransactionModal";
-import { apiErrorMessage, money } from "../lib/format";
+import { apiErrorMessage, currentMonth, money } from "../lib/format";
 import type { Category, Summary, Transaction, TransactionType } from "../types";
 
 interface DashboardPageProps {
@@ -20,14 +20,14 @@ export default function DashboardPage({ categories, onCategories }: DashboardPag
   const [newTransaction, setNewTransaction] = useState<TransactionType | null>(null);
 
   const load = useCallback(async () => {
-    const now = new Date();
+    const { month, year } = currentMonth();
     setLoading(true);
     setError("");
 
     try {
       const [summaryResponse, transactionResponse] = await Promise.all([
         api.get<Summary>("/dashboard/summary", {
-          params: { month: now.getMonth() + 1, year: now.getFullYear() },
+          params: { month, year },
         }),
         api.get<{ data: Transaction[] }>("/transactions", { params: { limit: 8 } }),
       ]);
@@ -79,17 +79,17 @@ export default function DashboardPage({ categories, onCategories }: DashboardPag
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard
           label="Receitas do mês"
-          value={money(summary?.totalIncome ?? 0)}
+          value={summary ? money(summary.totalIncome) : "—"}
           icon={<ArrowUpRight size={20} />}
         />
         <StatCard
           label="Despesas do mês"
-          value={money(summary?.totalExpense ?? 0)}
+          value={summary ? money(summary.totalExpense) : "—"}
           icon={<ArrowDownRight size={20} />}
         />
         <StatCard
           label="Resultado do mês"
-          value={money(balance)}
+          value={summary ? money(balance) : "—"}
           tone={balance >= 0 ? "positive" : "negative"}
           icon={<Wallet size={20} />}
         />

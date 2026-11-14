@@ -9,6 +9,7 @@ import type { Category } from "./types";
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
 const GoalsPage = lazy(() => import("./pages/GoalsPage"));
+const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 
 type SessionStatus = "loading" | "anonymous" | "authenticated";
 
@@ -22,16 +23,26 @@ function PageFallback() {
 
 function Workspace({ onSignOut }: { onSignOut: () => void }) {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [categoriesError, setCategoriesError] = useState(false);
   const [manageCategories, setManageCategories] = useState(false);
 
+  // Inclui as desativadas para o histórico; cada formulário de criação filtra as ativas.
   const refreshCategories = useCallback(async () => {
-    const response = await api.get<{ categories: Category[] }>("/categories");
+    const response = await api.get<{ categories: Category[] }>("/categories", {
+      params: { includeInactive: true },
+    });
     setCategories(response.data.categories);
+    setCategoriesError(false);
   }, []);
 
-  useEffect(() => {
-    refreshCategories().catch(() => setCategories([]));
+  // Uma falha aqui não pode parecer conta sem categorias.
+  const loadCategories = useCallback(() => {
+    refreshCategories().catch(() => setCategoriesError(true));
   }, [refreshCategories]);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   const openCategories = () => setManageCategories(true);
 
@@ -53,6 +64,7 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
             element={<TransactionsPage key="INCOME" type="INCOME" categories={categories} />}
           />
           <Route path="/metas" element={<GoalsPage categories={categories} />} />
+          <Route path="/assistente" element={<AssistantPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
@@ -63,6 +75,20 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
           onChanged={refreshCategories}
         />
       )}
+      {categoriesError && (
+        <div
+          role="alert"
+          className="fixed right-5 bottom-5 z-40 flex max-w-sm items-center gap-3 rounded-2xl bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700 shadow-xl"
+        >
+          Não foi possível carregar as categorias.
+          <button
+            onClick={loadCategories}
+            className="shrink-0 rounded-full bg-white px-3 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100"
+          >
+            Tentar de novo
+          </button>
+        </div>
+      )}
     </BrowserRouter>
   );
 }
@@ -70,6 +96,7 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
 export function App() {
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [notice, setNotice] = useState("");
+  const [signOutError, setSignOutError] = useState("");
 
   useEffect(() => {
     setSessionExpiredHandler(() => {
@@ -84,7 +111,16 @@ export function App() {
   }, []);
 
   const signOut = async () => {
-    await api.post("/auth/logout").catch(() => undefined);
+    setSignOutError("");
+
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // Sem a confirmação, o cookie continua válido: dizer que saiu seria falso.
+      setSignOutError("Não foi possível sair. Confira sua conexão e tente novamente.");
+      return;
+    }
+
     clearSession();
     setNotice("");
     setStatus("anonymous");
@@ -106,5 +142,17 @@ export function App() {
     );
   }
 
-  return <Workspace onSignOut={signOut} />;
+  return (
+    <>
+      <Workspace onSignOut={signOut} />
+      {signOutError && (
+        <p
+          role="alert"
+          className="fixed right-5 bottom-5 z-50 max-w-sm rounded-2xl bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700 shadow-xl"
+        >
+          {signOutError}
+        </p>
+      )}
+    </>
+  );
 }

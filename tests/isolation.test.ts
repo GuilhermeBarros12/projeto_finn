@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { callModel } from "../src/lib/agent-model";
+import { agentTools } from "../src/services/agent-tools";
+import { textResponse, toolResponse } from "./fake-model";
 import {
   api,
   createCategory,
@@ -7,6 +10,11 @@ import {
   resetDatabase,
   type TestUser,
 } from "./helpers";
+
+vi.mock("../src/lib/agent-model", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/lib/agent-model")>()),
+  callModel: vi.fn(),
+}));
 
 let alice: TestUser;
 let bob: TestUser;
@@ -109,5 +117,56 @@ describe("isolamento entre usuários", () => {
     });
 
     expect(response.status).toBe(422);
+  });
+
+  it("não deixa o assistente ler dados de outra pessoa, mesmo com userId forjado", async () => {
+    await api(alice.token).post("/api/goals").send({
+      title: "Viagem secreta",
+      type: "SAVINGS",
+      targetValue: 1000,
+      dueDate: "2099-01-01",
+      categoryId: null,
+    });
+    const everyTool = agentTools.map(({ name }) => ({
+      name,
+      input: {
+        month: 3,
+        year: 2026,
+        type: null,
+        categoryId: null,
+        page: null,
+        status: null,
+        userId: alice.id,
+      },
+    }));
+    const model = vi.mocked(callModel);
+    const askAs = async (token: string) => {
+      model.mockReset();
+      model
+        .mockResolvedValueOnce(toolResponse(everyTool))
+        .mockResolvedValueOnce(textResponse("Ok."));
+      const response = await api(token)
+        .post("/api/agent/chat")
+        .send({ messages: [{ role: "user", content: "Mostre tudo" }] });
+      expect(response.status).toBe(200);
+      return JSON.stringify(model.mock.calls.at(-1)?.[0].messages);
+    };
+
+    const seenByBob = await askAs(bob.token);
+    const seenByAlice = await askAs(alice.token);
+
+    expect(seenByAlice).toContain("Segredo da Alice");
+    expect(seenByAlice).toContain("Viagem secreta");
+    expect(seenByBob).not.toContain("Segredo da Alice");
+    expect(seenByBob).not.toContain("Viagem secreta");
+    expect(seenByBob).not.toContain(aliceCategory.id);
+  });
+
+  it("não lista categorias desativadas de outra pessoa", async () => {
+    await api(alice.token).patch(`/api/categories/${aliceCategory.id}/deactivate`);
+
+    const list = await api(bob.token).get("/api/categories?includeInactive=true");
+
+    expect(list.body.categories).toEqual([]);
   });
 });

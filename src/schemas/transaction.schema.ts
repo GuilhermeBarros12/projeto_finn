@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { moneySchema, paginationFields } from "./common.schema";
+import { calendarDateSchema, moneySchema, paginationFields } from "./common.schema";
 
 const transactionFields = {
   categoryId: z.uuid(),
   type: z.enum(["INCOME", "EXPENSE"]),
   description: z.string().trim().min(1).max(255),
-  date: z.coerce.date(),
+  date: calendarDateSchema,
   paymentMethod: z.enum(["PIX", "CREDIT_CARD", "DEBIT_CARD", "CASH", "BANK_TRANSFER", "OTHER"]),
   value: moneySchema,
 };

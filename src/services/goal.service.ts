@@ -1,10 +1,15 @@
 import { Prisma, type Goal } from "../../generated/prisma/client";
 import { AppError } from "../lib/app-error";
 import { addUtcDays, calendarDay } from "../lib/dates";
+import { env } from "../config/env";
 import { prisma } from "../lib/prisma";
 import type { CreateGoalInput, GoalListInput, UpdateGoalInput } from "../schemas/goal.schema";
 
-export interface GoalWithProgress extends Goal {
+const WITH_CATEGORY = { category: { select: { id: true, name: true, status: true } } } as const;
+
+type GoalWithCategory = Prisma.GoalGetPayload<{ include: typeof WITH_CATEGORY }>;
+
+export interface GoalWithProgress extends GoalWithCategory {
   currentValue: number;
   progress: number;
 }
@@ -43,38 +48,44 @@ export class GoalService {
   }
 
   /**
-   * O período da meta vai do dia em que foi criada até o prazo, inclusive.
+   * O período da meta vai do dia em que foi criada até o prazo, inclusive, e nunca passa de
+   * hoje: lançamento com data futura é previsão e não conta como dinheiro guardado ou gasto.
    * Limite de gasto soma as despesas da categoria; economia soma receitas menos despesas.
+   * Uma única consulta calcula todas as metas da página, em vez de uma consulta por meta.
    */
-  private async currentValue(goal: Goal): Promise<Prisma.Decimal> {
-    const where: Prisma.TransactionWhereInput = {
-      userId: goal.userId,
-      date: { gte: calendarDay(goal.createdAt), lt: addUtcDays(goal.dueDate, 1) },
-    };
+  private async currentValues(goals: Goal[]): Promise<Map<string, Prisma.Decimal>> {
+    if (goals.length === 0) return new Map();
 
-    if (goal.type === "SPENDING_LIMIT" && goal.categoryId) {
-      const spent = await prisma.transaction.aggregate({
-        where: { ...where, type: "EXPENSE", categoryId: goal.categoryId },
-        _sum: { value: true },
-      });
-      return spent._sum.value ?? new Prisma.Decimal(0);
-    }
+    const tomorrow = addUtcDays(calendarDay(new Date()), 1).toISOString().slice(0, 10);
+    const rows = await prisma.$queryRaw<Array<{ id: string; income: unknown; expense: unknown }>>`
+      SELECT g."id",
+        COALESCE(SUM(t."value") FILTER (WHERE t."type" = 'INCOME'), 0) AS income,
+        COALESCE(SUM(t."value") FILTER (WHERE t."type" = 'EXPENSE'), 0) AS expense
+      FROM "Goal" g
+      LEFT JOIN "Transaction" t
+        ON t."userId" = g."userId"
+        AND t."date" >= ((g."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${env.APP_TIMEZONE})::date
+        AND t."date" < LEAST(g."dueDate" + INTERVAL '1 day', ${tomorrow}::date)
+        AND (g."type" = 'SAVINGS' OR (t."type" = 'EXPENSE' AND t."categoryId" = g."categoryId"))
+      WHERE g."id" IN (${Prisma.join(goals.map((goal) => goal.id))})
+      GROUP BY g."id"
+    `;
 
-    const groups = await prisma.transaction.groupBy({
-      by: ["type"],
-      where,
-      _sum: { value: true },
-    });
-    const total = (type: "INCOME" | "EXPENSE"): Prisma.Decimal =>
-      groups.find((group) => group.type === type)?._sum.value ?? new Prisma.Decimal(0);
-    const saved = total("INCOME").minus(total("EXPENSE"));
+    const types = new Map(goals.map((goal) => [goal.id, goal.type]));
 
-    return saved.isNegative() ? new Prisma.Decimal(0) : saved;
+    return new Map(
+      rows.map((row) => {
+        const income = new Prisma.Decimal(String(row.income));
+        const expense = new Prisma.Decimal(String(row.expense));
+        if (types.get(row.id) === "SPENDING_LIMIT") return [row.id, expense];
+
+        const saved = income.minus(expense);
+        return [row.id, saved.isNegative() ? new Prisma.Decimal(0) : saved];
+      }),
+    );
   }
 
-  private async withProgress(goal: Goal): Promise<GoalWithProgress> {
-    const currentValue = await this.currentValue(goal);
-
+  private withProgress(goal: GoalWithCategory, currentValue: Prisma.Decimal): GoalWithProgress {
     return {
       ...goal,
       currentValue: currentValue.toNumber(),
@@ -97,15 +108,20 @@ export class GoalService {
     const [goals, total] = await prisma.$transaction([
       prisma.goal.findMany({
         where,
-        orderBy: { dueDate: "asc" },
+        // O id desempata prazos iguais, para nenhuma meta repetir ou sumir entre páginas.
+        orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+        include: WITH_CATEGORY,
         skip: (input.page - 1) * input.limit,
         take: input.limit,
       }),
       prisma.goal.count({ where }),
     ]);
+    const values = await this.currentValues(goals);
 
     return {
-      data: await Promise.all(goals.map((goal) => this.withProgress(goal))),
+      data: goals.map((goal) =>
+        this.withProgress(goal, values.get(goal.id) ?? new Prisma.Decimal(0)),
+      ),
       meta: { page: input.page, limit: input.limit, total },
     };
   }
@@ -114,7 +130,9 @@ export class GoalService {
     const goal = await prisma.goal.findFirst({ where: { id, userId } });
     if (!goal) throw new AppError("Meta não encontrada.", 404);
 
-    await this.validateCategory(userId, input);
+    // Só revalida se a categoria mudou: desativá-la não pode congelar as metas que já a usam.
+    if (input.categoryId !== goal.categoryId) await this.validateCategory(userId, input);
+
     return prisma.goal.update({ where: { id }, data: input });
   }
 

@@ -1,5 +1,5 @@
-import { once } from "node:events";
 import type { Request, Response } from "express";
+import { ClientDisconnectedError, createStreamWriter } from "../lib/stream-writer";
 import { exportFormatSchema } from "../schemas/export.schema";
 import { transactionFilterSchema } from "../schemas/transaction.schema";
 import { TransactionService, type TransactionWithCategory } from "../services/transaction.service";
@@ -39,10 +39,6 @@ const toCsvRow = (transaction: TransactionWithCategory): string =>
     .map(csvValue)
     .join(",");
 
-const write = async (response: Response, chunk: string): Promise<void> => {
-  if (!response.write(chunk)) await once(response, "drain");
-};
-
 export class ExportController {
   constructor(private readonly transactionService = new TransactionService()) {}
 
@@ -50,26 +46,37 @@ export class ExportController {
     const { format } = exportFormatSchema.parse(request.query);
     const filters = transactionFilterSchema.parse(request.query);
     const rows = this.transactionService.iterate(request.userId!, filters);
+    const write = createStreamWriter(response);
 
-    if (format === "csv") {
-      response.setHeader("Content-Type", "text/csv; charset=utf-8");
-      response.setHeader("Content-Disposition", 'attachment; filename="transacoes.csv"');
-      await write(response, `${UTF8_BOM}${CSV_HEADER.join(",")}\n`);
-      for await (const transaction of rows) await write(response, `${toCsvRow(transaction)}\n`);
-      response.end();
-      return;
+    try {
+      if (format === "csv") {
+        response.setHeader("Content-Type", "text/csv; charset=utf-8");
+        response.setHeader("Content-Disposition", 'attachment; filename="transacoes.csv"');
+        await write(`${UTF8_BOM}${CSV_HEADER.join(",")}\n`);
+        for await (const transaction of rows) await write(`${toCsvRow(transaction)}\n`);
+        response.end();
+        return;
+      }
+
+      response.setHeader("Content-Type", "application/json; charset=utf-8");
+      response.setHeader("Content-Disposition", 'attachment; filename="transacoes.json"');
+      await write('{"data":[');
+
+      let total = 0;
+      for await (const transaction of rows) {
+        await write(`${total > 0 ? "," : ""}${JSON.stringify(transaction)}`);
+        total += 1;
+      }
+
+      response.end(`],"meta":{"total":${total}}}`);
+    } catch (error) {
+      // Download cancelado: sair do laço já interrompe as consultas; não é erro do servidor.
+      if (error instanceof ClientDisconnectedError) {
+        request.log.info("Exportação interrompida pelo cliente");
+        return;
+      }
+
+      throw error;
     }
-
-    response.setHeader("Content-Type", "application/json; charset=utf-8");
-    response.setHeader("Content-Disposition", 'attachment; filename="transacoes.json"');
-    await write(response, '{"data":[');
-
-    let total = 0;
-    for await (const transaction of rows) {
-      await write(response, `${total > 0 ? "," : ""}${JSON.stringify(transaction)}`);
-      total += 1;
-    }
-
-    response.end(`],"meta":{"total":${total}}}`);
   };
 }

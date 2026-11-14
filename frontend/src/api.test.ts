@@ -73,6 +73,20 @@ describe("sessão no cliente HTTP", () => {
     expect(expired).toHaveBeenCalledTimes(1);
   });
 
+  it("não encerra a sessão quando a renovação falha por erro temporário", async () => {
+    const expired = vi.fn();
+    setSessionExpiredHandler(expired);
+    setAccessToken("expirado");
+    refreshPost.mockRejectedValue(new AxiosError("sem rede"));
+    api.defaults.adapter = async (config) => {
+      throw unauthorized(config);
+    };
+
+    await expect(api.get("/transactions")).rejects.toThrow();
+
+    expect(expired).not.toHaveBeenCalled();
+  });
+
   it("não tenta renovar quando o próprio login falha", async () => {
     api.defaults.adapter = async (config) => {
       throw unauthorized(config);

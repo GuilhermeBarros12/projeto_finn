@@ -21,12 +21,10 @@ const statusStyles: Record<GoalStatus, string> = {
 
 function GoalCard({
   goal,
-  category,
   onEdit,
   onRemove,
 }: {
   goal: Goal;
-  category?: Category;
   onEdit: () => void;
   onRemove: () => void;
 }) {
@@ -38,7 +36,7 @@ function GoalCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-500">
-            {isLimit ? `Limite · ${category?.name ?? "Categoria"}` : "Economia"}
+            {isLimit ? `Limite · ${goal.category?.name ?? "Categoria"}` : "Economia"}
           </p>
           <h2 className="mt-1 truncate text-xl font-semibold tracking-tight">{goal.title}</h2>
         </div>
@@ -87,6 +85,13 @@ function GoalCard({
   );
 }
 
+const PAGE_SIZE = 20;
+
+interface GoalPage {
+  data: Goal[];
+  meta: { total: number };
+}
+
 export default function GoalsPage({ categories }: { categories: Category[] }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,14 +99,20 @@ export default function GoalsPage({ categories }: { categories: Category[] }) {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Goal>();
   const [removing, setRemoving] = useState<Goal>();
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchPage = (page: number) =>
+    api.get<GoalPage>("/goals", { params: { page, limit: PAGE_SIZE } });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-      const response = await api.get<{ data: Goal[] }>("/goals", { params: { limit: 100 } });
+      const response = await fetchPage(1);
       setGoals(response.data.data);
+      setTotal(response.data.meta.total);
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Não foi possível carregar as metas."));
     } finally {
@@ -112,6 +123,22 @@ export default function GoalsPage({ categories }: { categories: Category[] }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadMore = async () => {
+    setLoadingMore(true);
+    setError("");
+
+    try {
+      const response = await fetchPage(Math.floor(goals.length / PAGE_SIZE) + 1);
+      const known = new Set(goals.map(({ id }) => id));
+      setGoals([...goals, ...response.data.data.filter(({ id }) => !known.has(id))]);
+      setTotal(response.data.meta.total);
+    } catch (requestError) {
+      setError(apiErrorMessage(requestError, "Não foi possível carregar mais metas."));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const confirmRemoval = async () => {
     if (!removing) return;
@@ -156,12 +183,23 @@ export default function GoalsPage({ categories }: { categories: Category[] }) {
             <GoalCard
               key={goal.id}
               goal={goal}
-              category={categories.find((category) => category.id === goal.categoryId)}
               onEdit={() => setEditing(goal)}
               onRemove={() => setRemoving(goal)}
             />
           ))}
         </section>
+      )}
+
+      {!loading && goals.length < total && (
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:shadow-md disabled:opacity-60"
+          >
+            {loadingMore ? "Carregando..." : `Carregar mais metas (${goals.length} de ${total})`}
+          </button>
+        </div>
       )}
 
       {(creating || editing) && (

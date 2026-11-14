@@ -3,6 +3,7 @@ import {
   FolderCog,
   LayoutDashboard,
   LogOut,
+  MessageCircle,
   PiggyBank,
   ReceiptText,
   Target,
@@ -15,6 +16,7 @@ const links = [
   { to: "/despesas", label: "Despesas", icon: ReceiptText },
   { to: "/receitas", label: "Receitas", icon: PiggyBank },
   { to: "/metas", label: "Metas", icon: Target },
+  { to: "/assistente", label: "Assistente", icon: MessageCircle },
 ];
 
 const itemClass =

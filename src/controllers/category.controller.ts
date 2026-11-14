@@ -1,13 +1,14 @@
 import type { Request, Response } from "express";
 import { z } from "zod";
-import { createCategorySchema } from "../schemas/category.schema";
+import { categoryListSchema, createCategorySchema } from "../schemas/category.schema";
 import { CategoryService } from "../services/category.service";
 
 export class CategoryController {
   constructor(private readonly categoryService = new CategoryService()) {}
 
   list = async (request: Request, response: Response): Promise<void> => {
-    const categories = await this.categoryService.list(request.userId!);
+    const { includeInactive } = categoryListSchema.parse(request.query);
+    const categories = await this.categoryService.list(request.userId!, includeInactive);
     response.status(200).json({ categories });
   };
 
