@@ -76,26 +76,27 @@ docs/       Guia de deploy e histórico de alterações
 
 Tudo fica sob `/api`. Exceto cadastro, login e saúde, as rotas exigem `Authorization: Bearer`.
 
-| Método e rota                        | Descrição                               |
-| ------------------------------------ | --------------------------------------- |
-| `POST /users`                        | Cria uma conta                          |
-| `POST /auth/login`                   | Entra e define o cookie de sessão       |
-| `POST /auth/refresh`, `/auth/logout` | Renova ou encerra a sessão              |
-| `GET, POST /categories`              | Lista ou cria categorias                |
-| `PATCH /categories/:id/deactivate`   | Desativa uma categoria pessoal          |
-| `GET, POST /transactions`            | Lista com filtros ou cria um lançamento |
-| `PUT, DELETE /transactions/:id`      | Edita ou exclui um lançamento           |
-| `GET /dashboard/summary`             | Totais do mês                           |
-| `GET /dashboard/by-category`         | Totais por categoria                    |
-| `GET /dashboard/by-origin`           | Totais por conta e cartão               |
-| `GET, POST /goals`                   | Lista com progresso ou cria uma meta    |
-| `PUT, DELETE /goals/:id`             | Edita ou exclui uma meta                |
-| `GET /exports/transactions`          | Exporta tudo em CSV ou JSON             |
-| `GET /health`                        | Verifica a API e o banco                |
+| Método e rota                        | Descrição                                  |
+| ------------------------------------ | ------------------------------------------ |
+| `POST /users`                        | Cria uma conta                             |
+| `POST /auth/login`                   | Entra e define o cookie de sessão          |
+| `POST /auth/refresh`, `/auth/logout` | Renova ou encerra a sessão                 |
+| `GET, POST /categories`              | Lista ou cria categorias                   |
+| `PATCH /categories/:id/deactivate`   | Desativa uma categoria pessoal             |
+| `GET, POST /transactions`            | Lista com filtros ou cria um lançamento    |
+| `PUT, DELETE /transactions/:id`      | Edita ou exclui um lançamento              |
+| `GET /dashboard/summary`             | Totais do mês                              |
+| `GET /dashboard/by-category`         | Totais por categoria                       |
+| `GET /dashboard/by-origin`           | Totais por conta e cartão                  |
+| `GET, POST /goals`                   | Lista com progresso ou cria uma meta       |
+| `PUT, DELETE /goals/:id`             | Edita ou exclui uma meta                   |
+| `GET /exports/transactions`          | Exporta tudo em CSV ou JSON                |
+| `POST /agent/chat`                   | Pergunta ao assistente, que só lê os dados |
+| `GET /health`                        | Verifica a API e o banco                   |
 
 ## Deploy
 
-Veja o [guia de deploy](docs/DEPLOY.md).
+Há dois caminhos: um servidor com Docker Compose ([guia](docs/DEPLOY.md)) ou serviços gerenciados, com a tela na Vercel, a API no Cloud Run e o banco no Neon ([guia](docs/DEPLOY-NUVEM.md)).
 
 ## Licença
 

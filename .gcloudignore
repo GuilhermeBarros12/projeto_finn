@@ -1,0 +1,13 @@
+# O que o "gcloud builds submit" não envia ao Cloud Build. Segredos nunca saem da máquina.
+.git
+.github
+.claude
+node_modules
+frontend
+dist
+generated
+coverage
+.env
+.env.*
+!.env.example
+!.env.production.example

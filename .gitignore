@@ -4,9 +4,11 @@ coverage
 # Keep environment variables out of version control
 .env
 .env.production
+.env.local
 
 /generated/prisma
 
 # Claude Code: preferências locais e material de apoio
 .claude/settings.local.json
 .claude/*.zip
+.neon

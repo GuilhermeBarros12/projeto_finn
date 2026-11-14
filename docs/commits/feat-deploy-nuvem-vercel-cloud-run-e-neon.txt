@@ -1,0 +1,26 @@
+Preparar o deploy na Vercel, no Cloud Run e no Neon
+feat-deploy-nuvem-vercel-cloud-run-e-neon
+
+Resumo
+Adiciona um caminho de deploy gerenciado: tela na Vercel, API no Google Cloud Run e banco PostgreSQL no Neon, com cadastro restrito por e-mail e guia passo a passo.
+
+Arquivos criados
+- frontend/vercel.json: repassa /api para o Cloud Run, mantendo a mesma origem que o cookie SameSite=Strict exige, com cabeçalhos de segurança e cache de assets.
+- cloudbuild.yaml: constrói as imagens api e migrate no Cloud Build.
+- .gcloudignore: impede o envio de .env e de outros segredos ao Google.
+- docs/DEPLOY-NUVEM.md: guia completo do zero.
+- tests/signup-allowlist.test.ts: cobre o cadastro restrito por e-mail.
+
+Arquivos alterados
+- docs/DEPLOY.md e README.md: apontam para os dois caminhos de deploy.
+- .gitignore: ignora .env.local e .neon.
+
+Regras preservadas
+- Segredos ficam no Secret Manager, nunca em arquivos do projeto.
+- No máximo uma instância da API, porque o limite de login fica na memória do processo.
+- SIGNUP_ALLOWED_EMAILS vazio mantém o cadastro aberto.
+
+Validação executada
+- Mesma bateria da entrega anterior: format:check, lint, check, build, 168 testes da API e 46 do frontend passaram.
+- Deploy real: migrations e seed aplicados no Neon (6 migrations, 10 categorias) e a API respondeu 200 em /api/health no Cloud Run.
+- Não verificado: o repasse da Vercel, o cookie de sessão por esse caminho e o limite de login por IP, que dependem da tela publicada.
