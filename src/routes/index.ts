@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { agentRoutes } from "./agent.routes";
 import { authRoutes } from "./auth.routes";
+import { cardsRoutes } from "./cards.routes";
 import { categoriesRoutes } from "./categories.routes";
 import { dashboardRoutes } from "./dashboard.routes";
 import { exportsRoutes } from "./exports.routes";
@@ -14,6 +15,7 @@ export const routes = Router();
 routes.use(healthRoutes);
 routes.use("/users", usersRoutes);
 routes.use("/auth", authRoutes);
+routes.use("/cards", cardsRoutes);
 routes.use("/categories", categoriesRoutes);
 routes.use("/transactions", transactionsRoutes);
 routes.use("/dashboard", dashboardRoutes);

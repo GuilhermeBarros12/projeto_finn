@@ -60,6 +60,16 @@ export const createCategory = async (
   return response.body.category;
 };
 
+export const createCard = async (
+  token: string,
+  overrides: Record<string, unknown> = {},
+): Promise<{ id: string; name: string; isDefault: boolean }> => {
+  const response = await api(token)
+    .post("/api/cards")
+    .send({ name: "Cartão", closingDay: 25, dueDay: 5, ...overrides });
+  return response.body.card;
+};
+
 export const createTransaction = async (
   token: string,
   categoryId: string,

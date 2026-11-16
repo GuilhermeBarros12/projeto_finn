@@ -4,6 +4,7 @@ import { agentTools } from "../src/services/agent-tools";
 import { textResponse, toolResponse } from "./fake-model";
 import {
   api,
+  createCard,
   createCategory,
   createTransaction,
   createUser,
@@ -60,6 +61,23 @@ describe("isolamento entre usuários", () => {
     expect(use.status).toBe(422);
     expect(deactivate.status).toBe(404);
     expect(list.body.categories).toEqual([]);
+  });
+
+  it("não deixa ler, editar, tornar padrão nem desativar cartão de outra pessoa", async () => {
+    const card = await createCard(alice.token);
+
+    const list = await api(bob.token).get("/api/cards?includeInactive=true");
+    const edit = await api(bob.token).put(`/api/cards/${card.id}`).send({ name: "Invadido" });
+    const makeDefault = await api(bob.token).patch(`/api/cards/${card.id}/default`);
+    const deactivate = await api(bob.token).patch(`/api/cards/${card.id}/deactivate`);
+    const original = await api(alice.token).get("/api/cards");
+
+    expect(list.body.cards).toEqual([]);
+    expect(edit.status).toBe(404);
+    expect(makeDefault.status).toBe(404);
+    expect(deactivate.status).toBe(404);
+    expect(original.body.cards[0].name).toBe("Cartão");
+    expect(original.body.cards[0].status).toBe(true);
   });
 
   it("não mistura valores no dashboard", async () => {
