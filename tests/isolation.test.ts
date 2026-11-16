@@ -80,6 +80,34 @@ describe("isolamento entre usuários", () => {
     expect(original.body.cards[0].status).toBe(true);
   });
 
+  it("não deixa ver, renovar, encerrar nem editar em grupo recorrência de outra pessoa", async () => {
+    await createCard(alice.token);
+    const created = await createTransaction(alice.token, aliceCategory.id, {
+      mode: "RECURRING",
+      date: "2026-01-10",
+    });
+    const recurrenceId = created.body.transaction.recurrenceId as string;
+    const transactionId = created.body.transaction.id as string;
+
+    const ending = await api(bob.token).get("/api/recurrences/ending");
+    const renew = await api(bob.token).post(`/api/recurrences/${recurrenceId}/renew`);
+    const finish = await api(bob.token).patch(`/api/recurrences/${recurrenceId}/finish`);
+    const edit = await api(bob.token)
+      .put(`/api/transactions/${transactionId}?scope=FOLLOWING`)
+      .send({ description: "invadido" });
+    const remove = await api(bob.token).delete(
+      `/api/transactions/${transactionId}?scope=FOLLOWING`,
+    );
+    const original = await api(alice.token).get("/api/transactions?limit=100");
+
+    expect(ending.body.recurrences).toEqual([]);
+    expect(renew.status).toBe(404);
+    expect(finish.status).toBe(404);
+    expect(edit.status).toBe(404);
+    expect(remove.status).toBe(404);
+    expect(original.body.meta.total).toBe(13);
+  });
+
   it("não mistura valores no dashboard", async () => {
     const period = "month=3&year=2026";
     const summary = await api(bob.token).get(`/api/dashboard/summary?${period}`);

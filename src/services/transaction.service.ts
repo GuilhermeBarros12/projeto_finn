@@ -29,6 +29,8 @@ const WITH_RELATIONS = {
   card: { select: { id: true, name: true } },
 } as const;
 const RECURRENCE_MONTHS = 12;
+
+export type TransactionScope = "ONE" | "FOLLOWING";
 const NEWEST_FIRST: Prisma.TransactionOrderByWithRelationInput[] = [
   { date: "desc" },
   { createdAt: "desc" },
@@ -252,11 +254,12 @@ export class TransactionService {
     }
   }
 
-  async update(
+  /** Lançamento âncora e filtro do escopo: só ele, ou ele e os seguintes do mesmo grupo. */
+  private async findScoped(
     userId: string,
     transactionId: string,
-    input: UpdateTransactionInput,
-  ): Promise<Transaction> {
+    scope: TransactionScope,
+  ): Promise<{ transaction: Transaction; where: Prisma.TransactionWhereInput; grouped: boolean }> {
     const transaction = await prisma.transaction.findFirst({
       where: { id: transactionId, userId },
     });
@@ -265,40 +268,102 @@ export class TransactionService {
       throw new AppError("Transação não encontrada.", 404);
     }
 
+    if (scope === "FOLLOWING") {
+      if (transaction.installmentGroupId && transaction.installmentNumber !== null) {
+        return {
+          transaction,
+          grouped: true,
+          where: {
+            userId,
+            installmentGroupId: transaction.installmentGroupId,
+            installmentNumber: { gte: transaction.installmentNumber },
+          },
+        };
+      }
+
+      if (transaction.recurrenceId) {
+        return {
+          transaction,
+          grouped: true,
+          where: {
+            userId,
+            recurrenceId: transaction.recurrenceId,
+            date: { gte: transaction.date },
+          },
+        };
+      }
+    }
+
+    return { transaction, grouped: false, where: { userId, id: transaction.id } };
+  }
+
+  async update(
+    userId: string,
+    transactionId: string,
+    input: UpdateTransactionInput,
+    scope: TransactionScope = "ONE",
+  ): Promise<{ transaction: TransactionWithCategory; updatedCount: number }> {
+    if (scope === "FOLLOWING" && input.date !== undefined) {
+      throw new AppError("Para mudar a data, edite um lançamento por vez.", 400);
+    }
+
+    const { transaction, where } = await this.findScoped(userId, transactionId, scope);
+
     const categoryId = input.categoryId ?? transaction.categoryId;
     const type = input.type ?? transaction.type;
+    const paymentMethod = input.paymentMethod ?? transaction.paymentMethod;
+
+    if (transaction.installmentGroupId && (type !== "EXPENSE" || paymentMethod !== "CREDIT_CARD")) {
+      throw new AppError("Parcelas precisam continuar como despesa no cartão de crédito.", 422);
+    }
 
     // Só revalida o que mudou: desativar uma categoria não pode congelar o histórico dela.
     if (categoryId !== transaction.categoryId || type !== transaction.type) {
       await this.validateCategoryAndType(userId, categoryId, type);
     }
 
-    const paymentMethod = input.paymentMethod ?? transaction.paymentMethod;
-    let cardId: string | null = transaction.cardId;
+    // Cada lançamento mantém o próprio cartão, a menos que a origem ou o cartão mudem.
+    let cardChange: { cardId: string | null } | undefined;
 
     if (paymentMethod !== "CREDIT_CARD") {
-      cardId = null;
+      cardChange = { cardId: null };
     } else if (input.cardId && input.cardId !== transaction.cardId) {
-      cardId = (await this.cardService.getUsableCard(userId, input.cardId)).id;
-    } else if (!cardId) {
-      cardId = await this.resolveCardId(userId, paymentMethod, undefined);
+      cardChange = { cardId: (await this.cardService.getUsableCard(userId, input.cardId)).id };
+    } else if (!transaction.cardId) {
+      cardChange = { cardId: await this.resolveCardId(userId, paymentMethod, undefined) };
     }
 
-    return prisma.transaction.update({
-      where: { id: transaction.id },
-      data: { ...input, cardId },
+    const result = await prisma.transaction.updateMany({
+      where,
+      data: { ...input, ...cardChange },
     });
+
+    const updated = await prisma.transaction.findFirstOrThrow({
+      where: { id: transaction.id, userId },
+      include: WITH_RELATIONS,
+    });
+
+    return { transaction: updated, updatedCount: result.count };
   }
 
-  async delete(userId: string, transactionId: string): Promise<void> {
-    const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, userId },
+  async delete(
+    userId: string,
+    transactionId: string,
+    scope: TransactionScope = "ONE",
+  ): Promise<void> {
+    const { transaction, where } = await this.findScoped(userId, transactionId, scope);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({ where });
+
+      if (transaction.recurrenceId) {
+        const remaining = await tx.transaction.count({
+          where: { recurrenceId: transaction.recurrenceId },
+        });
+        if (remaining === 0) {
+          await tx.recurrence.delete({ where: { id: transaction.recurrenceId } });
+        }
+      }
     });
-
-    if (!transaction) {
-      throw new AppError("Transação não encontrada.", 404);
-    }
-
-    await prisma.transaction.delete({ where: { id: transaction.id } });
   }
 }

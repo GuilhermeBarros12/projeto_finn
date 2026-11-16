@@ -117,3 +117,7 @@ export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof updateTransactionSchema>;
 export type TransactionFilterInput = z.infer<typeof transactionFilterSchema>;
 export type TransactionListInput = z.infer<typeof transactionListSchema>;
+
+export const transactionScopeSchema = z.object({
+  scope: z.enum(["ONE", "FOLLOWING"]).default("ONE"),
+});

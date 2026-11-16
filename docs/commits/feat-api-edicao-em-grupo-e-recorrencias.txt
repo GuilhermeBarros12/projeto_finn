@@ -1,0 +1,30 @@
+Edição em grupo e renovação de recorrência
+feat-api-edicao-em-grupo-e-recorrencias
+
+Resumo
+PUT e DELETE de lançamentos aceitam scope=ONE ou FOLLOWING para parcelas e recorrências, e nasce
+a API /api/recurrences para listar as que estão acabando, renovar por 12 meses e encerrar.
+Etapa 5 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- src/services/recurrence.service.ts: ending, renew e finish
+- src/controllers/recurrence.controller.ts: controller das recorrências
+- src/routes/recurrences.routes.ts: GET /ending, POST /:id/renew, PATCH /:id/finish
+- tests/recurrences.test.ts: escopo em grupo, aviso, renovação e encerramento
+
+Arquivos alterados
+- src/services/transaction.service.ts: escopo, updateMany/deleteMany filtrados por userId, regra das parcelas, cartão por lançamento, remoção da Recurrence vazia
+- src/schemas/transaction.schema.ts: transactionScopeSchema
+- src/controllers/transaction.controller.ts: lê scope; PUT responde { transaction, updatedCount }
+- src/routes/index.ts: monta /recurrences
+- tests/isolation.test.ts: Bob não vê, renova, encerra nem edita em grupo recorrência da Alice
+
+Regras preservadas
+- Toda escrita em grupo filtra por userId; o value enviado vale para cada lançamento atingido.
+- Data não muda com FOLLOWING (400); parcelas continuam despesa no crédito (422).
+- A renovação usa o dia do primeiro lançamento como âncora.
+
+Validação executada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npm test: suíte completa passando
