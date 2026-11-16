@@ -24,7 +24,7 @@ export interface PaginatedTransactions {
 }
 
 const EXPORT_BATCH_SIZE = 500;
-const WITH_RELATIONS = {
+export const WITH_RELATIONS = {
   category: { select: { id: true, name: true, icon: true, color: true } },
   card: { select: { id: true, name: true } },
 } as const;

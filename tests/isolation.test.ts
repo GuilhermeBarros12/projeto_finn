@@ -108,6 +108,22 @@ describe("isolamento entre usuários", () => {
     expect(original.body.meta.total).toBe(13);
   });
 
+  it("não deixa ver fatura de cartão de outra pessoa", async () => {
+    const card = await createCard(alice.token);
+    await createTransaction(alice.token, aliceCategory.id, {
+      paymentMethod: "CREDIT_CARD",
+      cardId: card.id,
+    });
+
+    const current = await api(bob.token).get(`/api/cards/${card.id}/invoices/current`);
+    const month = await api(bob.token).get(`/api/cards/${card.id}/invoices/2026/4`);
+    const overview = await api(bob.token).get("/api/cards/overview");
+
+    expect(current.status).toBe(404);
+    expect(month.status).toBe(404);
+    expect(overview.body.cards).toEqual([]);
+  });
+
   it("não mistura valores no dashboard", async () => {
     const period = "month=3&year=2026";
     const summary = await api(bob.token).get(`/api/dashboard/summary?${period}`);

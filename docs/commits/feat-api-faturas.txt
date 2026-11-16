@@ -1,0 +1,26 @@
+API de faturas
+feat-api-faturas
+
+Resumo
+Faturas calculadas na hora a partir dos lançamentos e dos dias do cartão: visão geral dos cartões
+ativos, fatura atual e fatura por mês de vencimento. Etapa 6 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- src/services/invoice.service.ts: invoiceSummary, invoice, current e overview
+- src/schemas/invoice.schema.ts: parâmetros de cartão, ano e mês
+- src/controllers/invoice.controller.ts: controller das faturas
+- tests/invoices.test.ts: faturas por fechamento, parcelas, total por cartão, status e overview
+
+Arquivos alterados
+- src/routes/cards.routes.ts: GET /overview (antes das rotas com /:id), /:id/invoices/current e /:id/invoices/:year/:month
+- src/services/transaction.service.ts: WITH_RELATIONS passa a ser exportada
+- tests/isolation.test.ts: Bob recebe 404 na fatura e overview vazio
+
+Regras preservadas
+- Não existe tabela de faturas nem total guardado; o total soma em Decimal e vira number só na resposta.
+- Hoje vem de calendarDay; cartão desativado continua com histórico de faturas.
+
+Validação executada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npm test: suíte completa passando
