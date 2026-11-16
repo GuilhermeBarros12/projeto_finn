@@ -1,0 +1,20 @@
+Ferramentas de cartões e faturas no assistente
+feat-agente-cartoes-e-faturas
+
+Resumo
+O assistente ganha duas ferramentas somente de leitura, listar_cartoes e consultar_fatura, que
+reaproveitam CardService e InvoiceService. A descrição da fatura deixa claro que o mês é o do
+vencimento. Etapa 12 de docs/planos/cartao-de-credito.md (feita logo após a 6, pois só depende da API).
+
+Arquivos alterados
+- src/services/agent-tools.ts: novas ferramentas strict, com validação de month e year juntos e erro 422 sem cartão
+- tests/agent.test.ts: totais da fatura com modelo simulado, erro sem cartão e lista de ferramentas
+- tests/isolation.test.ts: Bob com o cardId da Alice recebe erro, sem dados
+
+Regras preservadas
+- Ferramentas só leem; o usuário vem sempre do token. Nenhuma regra de calendário foi repetida.
+
+Validação executada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npm test: suíte completa passando

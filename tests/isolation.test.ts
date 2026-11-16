@@ -124,6 +124,36 @@ describe("isolamento entre usuários", () => {
     expect(overview.body.cards).toEqual([]);
   });
 
+  it("não deixa o assistente ler fatura de cartão de outra pessoa", async () => {
+    const card = await createCard(alice.token, { name: "Cartão secreto" });
+    await createTransaction(alice.token, aliceCategory.id, {
+      description: "Compra secreta",
+      paymentMethod: "CREDIT_CARD",
+      cardId: card.id,
+    });
+    vi.mocked(callModel)
+      .mockResolvedValueOnce(
+        toolResponse([
+          { name: "consultar_fatura", input: { cardId: card.id, month: null, year: null } },
+          { name: "listar_cartoes", input: {} },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Ok."));
+
+    await api(bob.token)
+      .post("/api/agent/chat")
+      .send({ messages: [{ role: "user", content: "Minha fatura?" }] });
+    const { messages } = vi.mocked(callModel).mock.calls.at(-1)?.[0] as {
+      messages: Array<{ content: unknown }>;
+    };
+    const results = messages.at(-1)?.content as Array<{ content: string; is_error: boolean }>;
+
+    expect(results[0]?.is_error).toBe(true);
+    expect(results[1]?.content).toBe("[]");
+    expect(JSON.stringify(results)).not.toContain("Cartão secreto");
+    expect(JSON.stringify(results)).not.toContain("Compra secreta");
+  });
+
   it("não mistura valores no dashboard", async () => {
     const period = "month=3&year=2026";
     const summary = await api(bob.token).get(`/api/dashboard/summary?${period}`);
