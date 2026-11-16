@@ -11,11 +11,11 @@ export class TransactionController {
   constructor(private readonly transactionService = new TransactionService()) {}
 
   create = async (request: Request, response: Response): Promise<void> => {
-    const transaction = await this.transactionService.create(
+    const transactions = await this.transactionService.create(
       request.userId!,
       createTransactionSchema.parse(request.body),
     );
-    response.status(201).json({ transaction });
+    response.status(201).json({ transaction: transactions[0], transactions });
   };
 
   list = async (request: Request, response: Response): Promise<void> => {

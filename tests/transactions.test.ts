@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { calendarDay } from "../src/lib/dates";
 import {
   api,
+  createCard,
   createCategory,
   createTransaction,
   createUser,
@@ -95,6 +96,7 @@ describe("regras de transação", () => {
 describe("dashboard", () => {
   it("agrega no servidor por categoria e origem", async () => {
     await createTransaction(user.token, expense.id, { value: 70 });
+    await createCard(user.token);
     await createTransaction(user.token, expense.id, { value: 30, paymentMethod: "CREDIT_CARD" });
     await createTransaction(user.token, income.id, { type: "INCOME", value: 500 });
     const period = "month=3&year=2026";
@@ -211,5 +213,154 @@ describe("listagem de categorias (UI-04)", () => {
   it("recusa valor desconhecido no filtro", async () => {
     const response = await api(user.token).get("/api/categories?includeInactive=sim");
     expect(response.status).toBe(400);
+  });
+});
+
+describe("cartão, parcelas e recorrência", () => {
+  const credit = { paymentMethod: "CREDIT_CARD" };
+
+  it("crédito sem cardId usa o padrão; sem cartão devolve 422", async () => {
+    const semCartao = await createTransaction(user.token, expense.id, credit);
+    const card = await createCard(user.token);
+    const comPadrao = await createTransaction(user.token, expense.id, credit);
+
+    expect(semCartao.status).toBe(422);
+    expect(comPadrao.status).toBe(201);
+    expect(comPadrao.body.transaction.cardId).toBe(card.id);
+    expect(comPadrao.body.transaction.card.name).toBe("Cartão");
+    expect(comPadrao.body.transactions).toHaveLength(1);
+  });
+
+  it("recusa cartão desativado (422) e cardId com PIX (400)", async () => {
+    const card = await createCard(user.token);
+    await createCard(user.token, { name: "Outro" });
+    await api(user.token).patch(`/api/cards/${card.id}/deactivate`);
+
+    const inativo = await createTransaction(user.token, expense.id, { ...credit, cardId: card.id });
+    const pix = await createTransaction(user.token, expense.id, { cardId: card.id });
+
+    expect(inativo.status).toBe(422);
+    expect(pix.status).toBe(400);
+  });
+
+  it("divide R$ 100,00 em 3x no modo total, com o centavo na primeira parcela", async () => {
+    await createCard(user.token);
+    const response = await createTransaction(user.token, expense.id, {
+      ...credit,
+      mode: "INSTALLMENTS",
+      installments: { count: 3, valueMode: "TOTAL" },
+    });
+    const parcelas = response.body.transactions;
+
+    expect(response.status).toBe(201);
+    expect(parcelas.map((item: { value: string }) => Number(item.value))).toEqual([
+      33.34, 33.33, 33.33,
+    ]);
+    expect(parcelas.map((item: { installmentNumber: number }) => item.installmentNumber)).toEqual([
+      1, 2, 3,
+    ]);
+    expect(
+      new Set(parcelas.map((item: { installmentGroupId: string }) => item.installmentGroupId)).size,
+    ).toBe(1);
+    expect(response.body.transaction.id).toBe(parcelas[0].id);
+  });
+
+  it("usa o valor de cada parcela no modo PER_INSTALLMENT", async () => {
+    await createCard(user.token);
+    const response = await createTransaction(user.token, expense.id, {
+      ...credit,
+      value: 50,
+      mode: "INSTALLMENTS",
+      installments: { count: 4, valueMode: "PER_INSTALLMENT" },
+    });
+
+    expect(response.body.transactions.map((item: { value: string }) => Number(item.value))).toEqual(
+      [50, 50, 50, 50],
+    );
+  });
+
+  it("mantém o dia da compra nas parcelas (31/01, 28/02, 31/03)", async () => {
+    await createCard(user.token);
+    const response = await createTransaction(user.token, expense.id, {
+      ...credit,
+      date: "2026-01-31",
+      mode: "INSTALLMENTS",
+      installments: { count: 3, valueMode: "TOTAL" },
+    });
+
+    expect(
+      response.body.transactions.map((item: { date: string }) => item.date.slice(0, 10)),
+    ).toEqual(["2026-01-31", "2026-02-28", "2026-03-31"]);
+  });
+
+  it("recusa total menor que um centavo por parcela e parcelamento inválido", async () => {
+    await createCard(user.token);
+    const pequeno = await createTransaction(user.token, expense.id, {
+      ...credit,
+      value: 0.02,
+      mode: "INSTALLMENTS",
+      installments: { count: 3, valueMode: "TOTAL" },
+    });
+    const pix = await createTransaction(user.token, expense.id, {
+      mode: "INSTALLMENTS",
+      installments: { count: 3, valueMode: "TOTAL" },
+    });
+    const receita = await createTransaction(user.token, income.id, {
+      ...credit,
+      type: "INCOME",
+      mode: "INSTALLMENTS",
+      installments: { count: 3, valueMode: "TOTAL" },
+    });
+
+    expect(pequeno.status).toBe(422);
+    expect(pix.status).toBe(400);
+    expect(receita.status).toBe(400);
+  });
+
+  it("recorrente gera 12 meses, ou até a data final", async () => {
+    const semFim = await createTransaction(user.token, income.id, {
+      type: "INCOME",
+      mode: "RECURRING",
+    });
+    const comFim = await createTransaction(user.token, expense.id, {
+      mode: "RECURRING",
+      recurrence: { endDate: "2026-06-15" },
+    });
+
+    expect(semFim.body.transactions).toHaveLength(12);
+    expect(
+      new Set(semFim.body.transactions.map((item: { recurrenceId: string }) => item.recurrenceId))
+        .size,
+    ).toBe(1);
+    expect(comFim.body.transactions).toHaveLength(4);
+    expect(comFim.body.transactions[0].recurrenceId).toEqual(expect.any(String));
+  });
+
+  it("recorrência no cartão e data final anterior à data", async () => {
+    await createCard(user.token);
+    const cartao = await createTransaction(user.token, expense.id, {
+      ...credit,
+      mode: "RECURRING",
+    });
+    const invalida = await createTransaction(user.token, expense.id, {
+      mode: "RECURRING",
+      recurrence: { endDate: "2026-01-01" },
+    });
+
+    expect(cartao.body.transactions).toHaveLength(12);
+    expect(invalida.status).toBe(400);
+  });
+
+  it("filtra a listagem por cardId", async () => {
+    const first = await createCard(user.token, { name: "A" });
+    const second = await createCard(user.token, { name: "B" });
+    await createTransaction(user.token, expense.id, { ...credit, cardId: first.id });
+    await createTransaction(user.token, expense.id, { ...credit, cardId: second.id });
+    await createTransaction(user.token, expense.id);
+
+    const response = await api(user.token).get(`/api/transactions?cardId=${second.id}`);
+
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].card.name).toBe("B");
   });
 });

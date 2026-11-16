@@ -10,7 +10,44 @@ const transactionFields = {
   value: moneySchema,
 };
 
-export const createTransactionSchema = z.object(transactionFields);
+export const createTransactionSchema = z
+  .object({
+    ...transactionFields,
+    cardId: z.uuid().optional(),
+    mode: z.enum(["SINGLE", "INSTALLMENTS", "RECURRING"]).default("SINGLE"),
+    installments: z
+      .object({
+        count: z.number().int().min(2).max(48),
+        valueMode: z.enum(["TOTAL", "PER_INSTALLMENT"]),
+      })
+      .optional(),
+    recurrence: z.object({ endDate: calendarDateSchema.optional() }).optional(),
+  })
+  .superRefine((input, context) => {
+    const issue = (path: string, message: string): void =>
+      context.addIssue({ code: "custom", path: [path], message });
+
+    if (input.cardId && input.paymentMethod !== "CREDIT_CARD") {
+      issue("cardId", "cardId só é aceito quando a origem é cartão de crédito.");
+    }
+
+    if (input.mode === "INSTALLMENTS") {
+      if (!input.installments) issue("installments", "Informe as parcelas.");
+      if (input.paymentMethod !== "CREDIT_CARD" || input.type !== "EXPENSE") {
+        issue("mode", "Só despesas no cartão de crédito podem ser parceladas.");
+      }
+    } else if (input.installments) {
+      issue("installments", "installments só é aceito no modo INSTALLMENTS.");
+    }
+
+    if (input.recurrence) {
+      if (input.mode !== "RECURRING") {
+        issue("recurrence", "recurrence só é aceito no modo RECURRING.");
+      } else if (input.recurrence.endDate && input.recurrence.endDate < input.date) {
+        issue("recurrence", "A data final não pode ser anterior à data do lançamento.");
+      }
+    }
+  });
 
 export const updateTransactionSchema = z
   .object({
@@ -20,6 +57,7 @@ export const updateTransactionSchema = z
     date: transactionFields.date.optional(),
     paymentMethod: transactionFields.paymentMethod.optional(),
     value: transactionFields.value.optional(),
+    cardId: z.uuid().optional(),
   })
   .refine((input) => Object.values(input).some((value) => value !== undefined), {
     message: "Informe ao menos um campo para atualização.",
@@ -32,6 +70,7 @@ const filterFields = {
   categoryId: z.uuid().optional(),
   type: transactionFields.type.optional(),
   paymentMethod: transactionFields.paymentMethod.optional(),
+  cardId: z.uuid().optional(),
   origin: z.enum(["ACCOUNT", "CREDIT_CARD"]).optional(),
 };
 
