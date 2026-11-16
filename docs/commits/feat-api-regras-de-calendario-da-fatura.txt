@@ -1,0 +1,20 @@
+Regras de calendário da fatura
+feat-api-regras-de-calendario-da-fatura
+
+Resumo
+Funções puras que calculam em qual fatura cai uma compra e qual é o período de cada fatura,
+identificada pelo mês do vencimento. Etapa 2 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- src/lib/billing-calendar.ts: clampedDate, addMonthsKeepingDay, invoiceForDate, invoicePeriod e shiftInvoiceRef
+- tests/billing-calendar.test.ts: casos do plano e propriedade sobre 3 anos e pares de dias de fechamento e vencimento
+
+Regras preservadas
+- Compra no dia do fechamento vai para a fatura seguinte.
+- addMonthsKeepingDay parte sempre da data original, sem encadear.
+- Desvio do plano: o vencimento cai no mês do fechamento quando dueDay > closingDay (dias configurados), em vez de comparar as datas já ajustadas a meses curtos. A regra do plano gerava faturas inconsistentes (ex.: fecha 30 e vence 31 em fevereiro) e quebrava a propriedade exigida.
+
+Validação executada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npx vitest run tests/billing-calendar.test.ts: 8 testes passando
