@@ -14,7 +14,7 @@ let sequence = 0;
 
 export const resetDatabase = async (): Promise<void> => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "RefreshToken", "Transaction", "Goal", "Category", "User" CASCADE',
+    'TRUNCATE TABLE "RefreshToken", "Transaction", "Recurrence", "Card", "Goal", "Category", "User" CASCADE',
   );
 };
 

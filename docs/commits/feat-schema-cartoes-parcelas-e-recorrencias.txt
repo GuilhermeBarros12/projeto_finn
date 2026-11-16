@@ -1,0 +1,25 @@
+Schema de cartões, parcelas e recorrências
+feat-schema-cartoes-parcelas-e-recorrencias
+
+Resumo
+Cria os modelos Card e Recurrence e os campos de cartão, parcela e recorrência em Transaction,
+com restrições no banco. A migration cria um "Cartão principal" para quem já lançou no crédito e
+liga esses lançamentos a ele. Primeira etapa de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- prisma/migrations/20261116231038_add_cards_installments_recurrences/migration.sql: tabelas, índices, chaves estrangeiras, cartão principal dos dados antigos e CHECKs (dias do cartão, padrão ativo, campos de parcela, parcela excluindo recorrência), mais índice único parcial de um cartão padrão por usuário
+
+Arquivos alterados
+- prisma/schema.prisma: modelos Card e Recurrence, relações em User e campos cardId, installmentGroupId, installmentNumber, installmentCount e recurrenceId em Transaction
+- tests/helpers.ts: resetDatabase também trunca Card e Recurrence
+
+Regras preservadas
+- A regra "lançamento no crédito sempre tem cartão" fica para a etapa 4, em migration própria, para a suíte continuar verde.
+- Nenhum comportamento da API muda nesta etapa.
+
+Validação executada
+- npm run prisma:migrate: migration aplicada no banco de desenvolvimento (2 cartões criados, 4 lançamentos no crédito, 0 sem cartão)
+- npm run prisma:generate: cliente gerado
+- npm run check: sem erros
+- npm run lint: sem erros
+- npm test: 15 arquivos, 168 testes passando
