@@ -4,15 +4,11 @@ import { AppError } from "../lib/app-error";
 import { calendarDay } from "../lib/dates";
 import { prisma } from "../lib/prisma";
 import { CardService } from "./card.service";
-import type { TransactionWithCategory } from "./transaction.service";
+import { WITH_RELATIONS, type TransactionWithCategory } from "./transaction.service";
 
 const RENEW_MONTHS = 12;
 const WARNING_MONTHS = 2;
 const NOT_FOUND = "Recorrência não encontrada.";
-const WITH_RELATIONS = {
-  category: { select: { id: true, name: true, icon: true, color: true } },
-  card: { select: { id: true, name: true } },
-} as const;
 
 export interface EndingRecurrence {
   id: string;
@@ -84,6 +80,17 @@ export class RecurrenceService {
     ]);
 
     if (!first || !last) throw new AppError(NOT_FOUND, 404);
+
+    const category = await prisma.category.findFirst({
+      where: { id: last.categoryId, status: true, OR: [{ userId: null }, { userId }] },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new AppError(
+        "A categoria desta recorrência foi desativada. Escolha outra antes de renovar.",
+        422,
+      );
+    }
 
     if (last.cardId) await this.cardService.getUsableCard(userId, last.cardId);
 

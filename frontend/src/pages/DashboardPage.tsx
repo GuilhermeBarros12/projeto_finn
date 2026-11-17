@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownRight, ArrowUpRight, CreditCard, Plus, Wallet } from "lucide-react";
 import { api } from "../api";
 import { RecentTransactions } from "../components/RecentTransactions";
@@ -59,6 +59,8 @@ export default function DashboardPage({
 
   const [ending, setEnding] = useState<EndingRecurrence[]>([]);
   const [endingError, setEndingError] = useState("");
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   // O aviso é um extra: se falhar, o painel segue sem ele.
   const loadEnding = useCallback(async () => {
@@ -75,6 +77,10 @@ export default function DashboardPage({
   }, [loadEnding]);
 
   const resolveRecurrence = async (recurrence: EndingRecurrence, action: "renew" | "finish") => {
+    // O ref barra o segundo clique antes de o React redesenhar o botão desabilitado.
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setResolvingId(recurrence.id);
     setEndingError("");
 
     try {
@@ -84,6 +90,9 @@ export default function DashboardPage({
       void load();
     } catch (requestError) {
       setEndingError(apiErrorMessage(requestError, "Não foi possível atualizar a recorrência."));
+    } finally {
+      inFlight.current = false;
+      setResolvingId(null);
     }
   };
 
@@ -130,12 +139,14 @@ export default function DashboardPage({
           </span>
           <span className="flex gap-2">
             <button
+              disabled={resolvingId === recurrence.id}
               onClick={() => void resolveRecurrence(recurrence, "renew")}
               className="rounded-full bg-white px-4 py-2 font-semibold hover:bg-amber-100"
             >
               Renovar por 12 meses
             </button>
             <button
+              disabled={resolvingId === recurrence.id}
               onClick={() => void resolveRecurrence(recurrence, "finish")}
               className="rounded-full px-4 py-2 font-semibold hover:bg-amber-100"
             >
@@ -190,7 +201,9 @@ export default function DashboardPage({
           cards={cards}
           defaultType={newTransaction}
           onClose={() => setNewTransaction(null)}
-          onSaved={load}
+          onSaved={async () => {
+            await Promise.all([load(), loadEnding()]);
+          }}
         />
       )}
     </main>

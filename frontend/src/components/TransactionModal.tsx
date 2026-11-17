@@ -190,17 +190,29 @@ export function TransactionModal({
       return;
     }
 
-    const body: Record<string, unknown> = {
-      description: form.get("description"),
-      value,
-      categoryId,
-      type,
-      paymentMethod: creditCard ? "CREDIT_CARD" : method,
-    };
+    const description = form.get("description");
+    const paymentMethod = creditCard ? "CREDIT_CARD" : method;
+    const following = Boolean(initial && grouped && scope === "FOLLOWING");
+    let body: Record<string, unknown>;
 
-    if (creditCard) body.cardId = cardId;
-    // "Este e os seguintes" nunca muda a data: a API recusa.
-    if (!(grouped && scope === "FOLLOWING")) body.date = date;
+    if (initial && following) {
+      // A API aplica o corpo inteiro a todos os atingidos: só vai o que o usuário mudou.
+      body = {};
+      if (description !== initial.description) body.description = description;
+      if (Number(cents) !== Number(toCents(initial.value))) body.value = value;
+      if (categoryId !== initial.categoryId) body.categoryId = categoryId;
+      if (type !== initial.type) body.type = type;
+      if (paymentMethod !== initial.paymentMethod) body.paymentMethod = paymentMethod;
+      if (creditCard && cardId !== initial.cardId) body.cardId = cardId;
+
+      if (Object.keys(body).length === 0) {
+        setError("Nenhuma alteração para salvar.");
+        return;
+      }
+    } else {
+      body = { description, value, categoryId, type, paymentMethod, date };
+      if (creditCard) body.cardId = cardId;
+    }
 
     if (!initial) {
       body.mode = mode;

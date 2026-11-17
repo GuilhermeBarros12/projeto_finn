@@ -79,4 +79,43 @@ describe("DashboardPage", () => {
 
     await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/recurrences/r2/finish"));
   });
+
+  it("dois cliques rápidos em Renovar geram um único POST", async () => {
+    let finish: () => void = () => undefined;
+    vi.mocked(api.post).mockImplementation(
+      () => new Promise((resolve) => (finish = () => resolve({}))) as never,
+    );
+    vi.mocked(api.get).mockImplementation((async (url: string) => {
+      if (url === "/recurrences/ending") {
+        return {
+          data: {
+            recurrences: [
+              {
+                id: "r3",
+                description: "Aluguel",
+                value: 1000,
+                type: "EXPENSE",
+                lastDate: "2027-01-10",
+                cardName: null,
+              },
+            ],
+          },
+        };
+      }
+      if (url === "/dashboard/summary") {
+        return { data: { totalIncome: 0, totalExpense: 0, netBalance: 0 } };
+      }
+      return { data: { data: [] } };
+    }) as never);
+    vi.mocked(api.post).mockClear();
+    render(<DashboardPage categories={[]} onCategories={vi.fn()} />);
+
+    const button = await screen.findByRole("button", { name: "Renovar por 12 meses" });
+    await userEvent.dblClick(button);
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    finish();
+    await waitFor(() => expect(screen.queryByText(/Aluguel termina/)).not.toBeInTheDocument());
+  });
 });

@@ -1,0 +1,30 @@
+Correções da revisão do cartão de crédito
+fix-cartao-de-credito-correcoes-da-revisao
+
+Resumo
+Corrige pontos achados na revisão da branch feat-cartao-de-credito: edição em grupo não pode
+sobrescrever campos que não mudaram, renovação valida a categoria, PUT valida cardId como o POST
+e o aviso de recorrência não aceita clique duplo.
+
+Arquivos alterados
+- frontend/src/components/TransactionModal.tsx: com "Este e os seguintes" envia só os campos alterados; sem alteração mostra "Nenhuma alteração para salvar." sem chamar a API
+- frontend/src/components/TransactionModal.test.tsx: teste da descrição isolada e da edição sem alteração; teste existente do scope passou a alterar a descrição
+- src/services/recurrence.service.ts: renew responde 422 se a categoria foi desativada; usa o WITH_RELATIONS exportado de transaction.service
+- src/services/transaction.service.ts: cardId com origem diferente de crédito responde 400 no PUT
+- frontend/src/pages/DashboardPage.tsx: botões do aviso desabilitados durante a requisição (resolvingId e ref contra clique duplo); recarrega o aviso depois de salvar lançamento
+- frontend/src/pages/DashboardPage.test.tsx: dois cliques em Renovar geram um único POST
+- tests/recurrences.test.ts: renew com categoria desativada e mudança de tipo em grupo
+- tests/transactions.test.ts: PUT com cardId e origem PIX
+
+Regras preservadas
+- scope=ONE mantém o corpo completo, inclusive a data.
+- Item 4 (validar categorias dos demais atingidos ao mudar o tipo): não foi preciso código novo. Sem categoryId no corpo, a categoria do lançamento âncora já recusa a mudança de tipo com 422; o teste cobre esse caso.
+- Fora do escopo, como combinado: aviso ao desativar cartão com dívida futura e o caso de fevereiro em cartões que fecham dia 30 e vencem dia 31.
+
+Validação executada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npx prettier --check nos arquivos alterados: ok
+- npm test: 19 arquivos, 220 testes passando
+- npm test --prefix frontend: 15 arquivos, 81 testes passando
+- npm run build --prefix frontend: sem erros

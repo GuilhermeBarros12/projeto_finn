@@ -363,4 +363,16 @@ describe("cartão, parcelas e recorrência", () => {
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0].card.name).toBe("B");
   });
+
+  it("PUT recusa cardId quando a origem efetiva não é cartão (400)", async () => {
+    const card = await createCard(user.token);
+    const created = await createTransaction(user.token, expense.id);
+
+    const response = await api(user.token)
+      .put(`/api/transactions/${created.body.transaction.id}`)
+      .send({ cardId: card.id });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("cardId só é aceito quando a origem é cartão de crédito.");
+  });
 });

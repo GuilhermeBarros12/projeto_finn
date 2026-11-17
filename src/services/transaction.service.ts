@@ -317,6 +317,10 @@ export class TransactionService {
       throw new AppError("Parcelas precisam continuar como despesa no cartão de crédito.", 422);
     }
 
+    if (input.cardId && paymentMethod !== "CREDIT_CARD") {
+      throw new AppError("cardId só é aceito quando a origem é cartão de crédito.", 400);
+    }
+
     // Só revalida o que mudou: desativar uma categoria não pode congelar o histórico dela.
     if (categoryId !== transaction.categoryId || type !== transaction.type) {
       await this.validateCategoryAndType(userId, categoryId, type);

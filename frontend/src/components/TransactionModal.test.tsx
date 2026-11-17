@@ -269,6 +269,7 @@ describe("TransactionModal", () => {
       expect(screen.getByText("Parcela 2 de 5")).toBeInTheDocument();
       await userEvent.click(screen.getByRole("radio", { name: "Este e os seguintes" }));
       expect(screen.getByRole("button", { name: "Data" })).toBeDisabled();
+      await userEvent.type(screen.getByLabelText("Descrição"), " editada");
       await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
 
       await waitFor(() => expect(api.put).toHaveBeenCalled());
@@ -280,6 +281,62 @@ describe("TransactionModal", () => {
       expect(url).toBe("/transactions/t1");
       expect(body).not.toHaveProperty("date");
       expect(config).toEqual({ params: { scope: "FOLLOWING" } });
+    });
+
+    const parcelaEditavel = (): Transaction => ({
+      ...inactiveTransaction,
+      categoryId: "gasto",
+      category: { id: "gasto", name: "Categoria gasto", icon: "Tag", color: "#000000" },
+      paymentMethod: "CREDIT_CARD",
+      cardId: "c1",
+      card: { id: "c1", name: "Nubank" },
+      installmentGroupId: "g1",
+      installmentNumber: 1,
+      installmentCount: 3,
+    });
+
+    it("FOLLOWING envia só a descrição quando só ela mudou", async () => {
+      vi.mocked(api.put).mockResolvedValue({});
+      render(
+        <TransactionModal
+          categories={categories}
+          cards={cards}
+          initial={parcelaEditavel()}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("radio", { name: "Este e os seguintes" }));
+      const description = screen.getByLabelText("Descrição");
+      await userEvent.clear(description);
+      await userEvent.type(description, "Novo nome");
+      await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
+
+      await waitFor(() => expect(api.put).toHaveBeenCalled());
+      expect(api.put).toHaveBeenCalledWith(
+        "/transactions/t1",
+        { description: "Novo nome" },
+        { params: { scope: "FOLLOWING" } },
+      );
+    });
+
+    it("FOLLOWING sem alteração mostra erro e não chama a API", async () => {
+      render(
+        <TransactionModal
+          categories={categories}
+          cards={cards}
+          initial={parcelaEditavel()}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole("radio", { name: "Este e os seguintes" }));
+      await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
+
+      expect(screen.getByRole("alert")).toHaveTextContent("Nenhuma alteração para salvar.");
+      expect(api.put).not.toHaveBeenCalled();
     });
   });
 });

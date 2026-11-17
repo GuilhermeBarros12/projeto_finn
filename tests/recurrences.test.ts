@@ -214,4 +214,34 @@ describe("recorrências", () => {
 
     expect(renew.status).toBe(422);
   });
+
+  it("renew recusa categoria desativada (422)", async () => {
+    const outra = await createCategory(user.token, { name: "Temporária" });
+    const created = await createTransaction(user.token, outra.id, recurring("2026-01-10"));
+    await api(user.token).patch(`/api/categories/${outra.id}/deactivate`);
+
+    const renew = await api(user.token).post(
+      `/api/recurrences/${created.body.transaction.recurrenceId}/renew`,
+    );
+
+    expect(renew.status).toBe(422);
+    expect(renew.body.message).toBe(
+      "A categoria desta recorrência foi desativada. Escolha outra antes de renovar.",
+    );
+  });
+
+  it("FOLLOWING sem categoryId recusa mudar o tipo quando há outra categoria no grupo", async () => {
+    const outra = await createCategory(user.token, { name: "Outra despesa" });
+    const created = await createTransaction(user.token, expense.id, recurring("2026-01-10"));
+    const ocorrencias = created.body.transactions;
+    await api(user.token)
+      .put(`/api/transactions/${ocorrencias[2].id}`)
+      .send({ categoryId: outra.id });
+
+    const response = await api(user.token)
+      .put(`/api/transactions/${ocorrencias[0].id}?scope=FOLLOWING`)
+      .send({ type: "INCOME" });
+
+    expect(response.status).toBe(422);
+  });
 });
