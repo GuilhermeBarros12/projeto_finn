@@ -6,6 +6,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { TransactionModal } from "../components/TransactionModal";
 import { apiErrorMessage, currentMonth, formatDate, money } from "../lib/format";
 import type {
+  Card,
   Category,
   CategoryTotal,
   OriginTotals,
@@ -50,6 +51,8 @@ const downloadBlob = (blob: Blob, filename: string): void => {
 interface TransactionsPageProps {
   type: TransactionType;
   categories: Category[];
+  cards?: Card[];
+  refreshCards?: () => Promise<void>;
 }
 
 export default function TransactionsPage({ type, categories }: TransactionsPageProps) {

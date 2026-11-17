@@ -26,6 +26,12 @@ const transaction = {
   value: "10.00",
   date: "2026-03-15T00:00:00.000Z",
   paymentMethod: "PIX",
+  cardId: null,
+  card: null,
+  installmentGroupId: null,
+  installmentNumber: null,
+  installmentCount: null,
+  recurrenceId: null,
   category: { id: "c1", name: "Mercado", icon: "Tag", color: "#000000" },
 };
 

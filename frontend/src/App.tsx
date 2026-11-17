@@ -4,7 +4,7 @@ import { api, clearSession, refreshSession, setSessionExpiredHandler } from "./a
 import { AppSidebar } from "./components/AppSidebar";
 import { CategoryModal } from "./components/CategoryModal";
 import { AuthPage } from "./pages/AuthPage";
-import type { Category } from "./types";
+import type { Card, Category } from "./types";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
@@ -25,6 +25,8 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesError, setCategoriesError] = useState(false);
   const [manageCategories, setManageCategories] = useState(false);
+  const [cards, setCards] = useState<Card[]>([]);
+  const [cardsError, setCardsError] = useState(false);
 
   // Inclui as desativadas para o histórico; cada formulário de criação filtra as ativas.
   const refreshCategories = useCallback(async () => {
@@ -44,6 +46,23 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
     loadCategories();
   }, [loadCategories]);
 
+  // Inclui os desativados: lançamentos antigos ainda apontam para eles.
+  const refreshCards = useCallback(async () => {
+    const response = await api.get<{ cards: Card[] }>("/cards", {
+      params: { includeInactive: true },
+    });
+    setCards(response.data.cards);
+    setCardsError(false);
+  }, []);
+
+  const loadCards = useCallback(() => {
+    refreshCards().catch(() => setCardsError(true));
+  }, [refreshCards]);
+
+  useEffect(() => {
+    loadCards();
+  }, [loadCards]);
+
   const openCategories = () => setManageCategories(true);
 
   return (
@@ -53,15 +72,38 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
         <Routes>
           <Route
             path="/"
-            element={<DashboardPage categories={categories} onCategories={openCategories} />}
+            element={
+              <DashboardPage
+                categories={categories}
+                cards={cards}
+                refreshCards={refreshCards}
+                onCategories={openCategories}
+              />
+            }
           />
           <Route
             path="/despesas"
-            element={<TransactionsPage key="EXPENSE" type="EXPENSE" categories={categories} />}
+            element={
+              <TransactionsPage
+                key="EXPENSE"
+                type="EXPENSE"
+                categories={categories}
+                cards={cards}
+                refreshCards={refreshCards}
+              />
+            }
           />
           <Route
             path="/receitas"
-            element={<TransactionsPage key="INCOME" type="INCOME" categories={categories} />}
+            element={
+              <TransactionsPage
+                key="INCOME"
+                type="INCOME"
+                categories={categories}
+                cards={cards}
+                refreshCards={refreshCards}
+              />
+            }
           />
           <Route path="/metas" element={<GoalsPage categories={categories} />} />
           <Route path="/assistente" element={<AssistantPage />} />
@@ -74,6 +116,20 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
           onClose={() => setManageCategories(false)}
           onChanged={refreshCategories}
         />
+      )}
+      {cardsError && (
+        <div
+          role="alert"
+          className="fixed right-5 bottom-20 z-40 flex max-w-sm items-center gap-3 rounded-2xl bg-rose-50 px-5 py-4 text-sm font-medium text-rose-700 shadow-xl"
+        >
+          Não foi possível carregar os cartões.
+          <button
+            onClick={loadCards}
+            className="shrink-0 rounded-full bg-white px-3 py-1.5 font-semibold text-rose-700 transition hover:bg-rose-100"
+          >
+            Tentar de novo
+          </button>
+        </div>
       )}
       {categoriesError && (
         <div

@@ -1,0 +1,27 @@
+Calendário próprio e cartões no workspace
+feat-frontend-calendario-e-cartoes-no-workspace
+
+Resumo
+Cria o DatePicker (calendário próprio, sem dependência nova) e as funções de calendário sobre
+strings AAAA-MM-DD, espelha os tipos de cartão, fatura e recorrência, e carrega os cartões no
+workspace como as categorias. Etapa 7 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- frontend/src/lib/calendar.ts: monthGrid, addMonthsKeepingDay, formatLongDate e afins, só com UTC
+- frontend/src/lib/calendar.test.ts: grade de fevereiro de 2026, ano bissexto e regra de 31/01
+- frontend/src/components/DatePicker.tsx: popover com mês e ano, grade acessível, teclado, min e input escondido
+- frontend/src/components/DatePicker.test.tsx: abrir, navegar, escolher, Esc, setas e min
+
+Arquivos alterados
+- frontend/src/types.ts: Card, Invoice, InvoiceSummary, CardOverview, EndingRecurrence e campos novos em Transaction
+- frontend/src/App.tsx: estado cards, refreshCards e aviso de erro; repassa às páginas
+- frontend/src/pages/DashboardPage.tsx, frontend/src/pages/TransactionsPage.tsx: aceitam cards e refreshCards (usados na etapa 8)
+- frontend/src/components/TransactionModal.test.tsx, frontend/src/pages/TransactionsPage.test.tsx: fixtures com os campos novos
+
+Regras preservadas
+- Nenhum Date com fuso local monta o calendário; os testes rodam com TZ=America/Sao_Paulo.
+
+Validação executada
+- npm run lint: sem erros
+- npm test --prefix frontend: 13 arquivos, 57 testes passando
+- npm run build --prefix frontend: tsc e vite build sem erros

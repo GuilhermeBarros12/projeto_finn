@@ -5,10 +5,12 @@ import { RecentTransactions } from "../components/RecentTransactions";
 import { StatCard } from "../components/StatCard";
 import { TransactionModal } from "../components/TransactionModal";
 import { apiErrorMessage, currentMonth, money } from "../lib/format";
-import type { Category, Summary, Transaction, TransactionType } from "../types";
+import type { Card, Category, Summary, Transaction, TransactionType } from "../types";
 
 interface DashboardPageProps {
   categories: Category[];
+  cards?: Card[];
+  refreshCards?: () => Promise<void>;
   onCategories: () => void;
 }
 

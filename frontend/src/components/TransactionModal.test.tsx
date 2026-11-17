@@ -27,6 +27,12 @@ const inactiveTransaction: Transaction = {
   value: "45.90",
   date: "2026-03-15T00:00:00.000Z",
   paymentMethod: "PIX",
+  cardId: null,
+  card: null,
+  installmentGroupId: null,
+  installmentNumber: null,
+  installmentCount: null,
+  recurrenceId: null,
   category: { id: "antiga", name: "Antiga", icon: "Tag", color: "#000000" },
 };
 
