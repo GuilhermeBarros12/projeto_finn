@@ -8,6 +8,10 @@ import type { Card, Category } from "./types";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
+const CardsPage = lazy(() => import("./pages/CardsPage"));
+const CardDetailPage = lazy(() =>
+  import("./pages/CardsPage").then((module) => ({ default: module.CardDetailPage })),
+);
 const GoalsPage = lazy(() => import("./pages/GoalsPage"));
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 
@@ -104,6 +108,14 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
                 refreshCards={refreshCards}
               />
             }
+          />
+          <Route
+            path="/cartoes"
+            element={<CardsPage cards={cards} refreshCards={refreshCards} />}
+          />
+          <Route
+            path="/cartoes/:cardId"
+            element={<CardDetailPage cards={cards} categories={categories} />}
           />
           <Route path="/metas" element={<GoalsPage categories={categories} />} />
           <Route path="/assistente" element={<AssistantPage />} />

@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  CreditCard,
   FolderCog,
   LayoutDashboard,
   LogOut,
@@ -15,6 +16,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/despesas", label: "Despesas", icon: ReceiptText },
   { to: "/receitas", label: "Receitas", icon: PiggyBank },
+  { to: "/cartoes", label: "Cartões", icon: CreditCard },
   { to: "/metas", label: "Metas", icon: Target },
   { to: "/assistente", label: "Assistente", icon: MessageCircle },
 ];
