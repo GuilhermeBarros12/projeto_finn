@@ -1,0 +1,26 @@
+Lançamentos parcelados e recorrentes
+feat-api-lancamentos-parcelados-e-recorrentes
+
+Resumo
+O POST de lançamentos aceita cartão, modo (à vista, parcelado ou recorrente) e cria todos os
+lançamentos numa única transação. A regra "crédito sempre tem cartão" passa a valer no banco.
+Etapa 4 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- prisma/migrations/20261116233258_require_card_for_credit/migration.sql: CHECK que liga CREDIT_CARD a cardId
+
+Arquivos alterados
+- src/schemas/transaction.schema.ts: cardId, mode, installments e recurrence com validações cruzadas; cardId na edição e no filtro
+- src/services/transaction.service.ts: cartão padrão, divisão em centavos, datas mantendo o dia, recorrência de 12 meses, include do cartão (WITH_RELATIONS), filtro cardId e cartão coerente na edição
+- src/controllers/transaction.controller.ts: resposta 201 { transaction, transactions }
+- tests/transactions.test.ts: casos de cartão, parcelas, recorrência e filtro; teste de dashboard cria cartão antes
+
+Regras preservadas
+- Valores em Decimal e centavos inteiros; o centavo que sobra vai para a primeira parcela.
+- Na edição, trocar para outra origem zera o cartão, e trocar para crédito exige cartão (o escopo em grupo vem na etapa 5).
+
+Validação executada
+- npm run prisma:migrate: migration aplicada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npm test: 17 arquivos, 194 testes passando

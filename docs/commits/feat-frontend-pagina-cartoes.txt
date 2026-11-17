@@ -1,0 +1,26 @@
+Página Cartões
+feat-frontend-pagina-cartoes
+
+Resumo
+Nova página Cartões com a fatura atual e a próxima de cada cartão ativo, aviso para cartões com
+datas ainda não confirmadas, detalhe navegável por mês (/cartoes/:cardId?ano=&mes=) e o CardModal
+para criar, ajustar, tornar padrão e desativar. Etapa 10 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- frontend/src/pages/CardsPage.tsx: lista (CardsPage) e detalhe da fatura (CardDetailPage)
+- frontend/src/pages/CardsPage.test.tsx: overview, aviso de datas, estado vazio e navegação por mês
+- frontend/src/components/CardModal.tsx: formulário de cartão com ajuda de fechamento, validação de dias iguais e desativação com confirmação
+- frontend/src/components/CardModal.test.tsx: dias iguais, POST esperado, ajuda e desativar
+
+Arquivos alterados
+- frontend/src/App.tsx: rotas /cartoes e /cartoes/:cardId com lazy
+- frontend/src/components/AppSidebar.tsx: link "Cartões" entre Receitas e Metas
+
+Regras preservadas
+- O mês da fatura mora na URL; sem query, a fatura atual é gravada nela com replace.
+- Cartões desativados continuam com faturas consultáveis.
+
+Validação executada
+- npm run lint: sem erros
+- npm test --prefix frontend: 15 arquivos, 76 testes passando
+- npm run build --prefix frontend: sem erros

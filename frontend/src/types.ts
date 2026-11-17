@@ -20,6 +20,60 @@ export interface Transaction {
   date: string;
   paymentMethod: string;
   category: Pick<Category, "id" | "name" | "icon" | "color">;
+  cardId: string | null;
+  card: { id: string; name: string } | null;
+  installmentGroupId: string | null;
+  installmentNumber: number | null;
+  installmentCount: number | null;
+  recurrenceId: string | null;
+}
+
+export interface Card {
+  id: string;
+  name: string;
+  closingDay: number;
+  dueDay: number;
+  isDefault: boolean;
+  status: boolean;
+  datesConfirmedAt: string | null;
+}
+
+export type InvoiceStatus = "CLOSED" | "OPEN" | "FUTURE";
+
+export interface InvoiceRef {
+  year: number;
+  month: number;
+}
+
+export interface InvoiceSummary {
+  ref: InvoiceRef;
+  start: string;
+  end: string;
+  closingDate: string;
+  dueDate: string;
+  status: InvoiceStatus;
+  total: number;
+  transactionsCount: number;
+}
+
+export interface Invoice extends InvoiceSummary {
+  card: Pick<Card, "id" | "name" | "closingDay" | "dueDay">;
+  transactions: Transaction[];
+}
+
+export interface CardOverview {
+  card: Pick<Card, "id" | "name" | "closingDay" | "dueDay" | "isDefault" | "datesConfirmedAt">;
+  current: InvoiceSummary;
+  next: InvoiceSummary;
+}
+
+export interface EndingRecurrence {
+  id: string;
+  description: string;
+  value: number;
+  type: TransactionType;
+  lastDate: string;
+  cardName: string | null;
 }
 
 export interface Summary {

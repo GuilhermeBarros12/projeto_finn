@@ -14,7 +14,7 @@ let sequence = 0;
 
 export const resetDatabase = async (): Promise<void> => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "RefreshToken", "Transaction", "Goal", "Category", "User" CASCADE',
+    'TRUNCATE TABLE "RefreshToken", "Transaction", "Recurrence", "Card", "Goal", "Category", "User" CASCADE',
   );
 };
 
@@ -58,6 +58,16 @@ export const createCategory = async (
     .post("/api/categories")
     .send({ name: "Mercado", type: "EXPENSE", icon: "Utensils", color: "#163300", ...overrides });
   return response.body.category;
+};
+
+export const createCard = async (
+  token: string,
+  overrides: Record<string, unknown> = {},
+): Promise<{ id: string; name: string; isDefault: boolean }> => {
+  const response = await api(token)
+    .post("/api/cards")
+    .send({ name: "Cartão", closingDay: 25, dueDay: 5, ...overrides });
+  return response.body.card;
 };
 
 export const createTransaction = async (

@@ -6,19 +6,27 @@ interface ConfirmDialogProps {
   title: string;
   message: string;
   onCancel: () => void;
-  onConfirm: () => Promise<void>;
+  onConfirm: (value?: string) => Promise<void>;
+  /** Com opções, o diálogo mostra um botão por opção e passa o valor escolhido a `onConfirm`. */
+  options?: { label: string; value: string }[];
 }
 
-export function ConfirmDialog({ title, message, onCancel, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({
+  title,
+  message,
+  onCancel,
+  onConfirm,
+  options,
+}: ConfirmDialogProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const confirm = async () => {
+  const confirm = async (value?: string) => {
     setBusy(true);
     setError("");
 
     try {
-      await onConfirm();
+      await onConfirm(value);
     } catch (requestError) {
       setError(apiErrorMessage(requestError, "Não foi possível excluir."));
       setBusy(false);
@@ -33,20 +41,33 @@ export function ConfirmDialog({ title, message, onCancel, onConfirm }: ConfirmDi
           {error}
         </p>
       )}
-      <div className="mt-6 flex justify-end gap-3">
+      <div className="mt-6 flex flex-wrap justify-end gap-3">
         <button
           onClick={onCancel}
           className="rounded-full bg-slate-100 px-5 py-2.5 text-sm font-semibold hover:bg-slate-200"
         >
           Cancelar
         </button>
-        <button
-          disabled={busy}
-          onClick={confirm}
-          className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
-        >
-          {busy ? "Excluindo..." : "Excluir"}
-        </button>
+        {options ? (
+          options.map((option) => (
+            <button
+              key={option.value}
+              disabled={busy}
+              onClick={() => confirm(option.value)}
+              className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+            >
+              {option.label}
+            </button>
+          ))
+        ) : (
+          <button
+            disabled={busy}
+            onClick={() => confirm()}
+            className="rounded-full bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60"
+          >
+            {busy ? "Excluindo..." : "Excluir"}
+          </button>
+        )}
       </div>
     </Modal>
   );

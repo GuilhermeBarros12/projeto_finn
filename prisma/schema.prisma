@@ -38,17 +38,19 @@ enum GoalStatus {
 }
 
 model User {
-  id           String        @id @default(uuid(7))
-  name         String
-  email        String        @unique
-  password     String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  preference   Json?
-  categories   Category[]
-  transactions Transaction[]
-  goals        Goal[]
+  id            String         @id @default(uuid(7))
+  name          String
+  email         String         @unique
+  password      String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  preference    Json?
+  categories    Category[]
+  transactions  Transaction[]
+  goals         Goal[]
   refreshTokens RefreshToken[]
+  cards         Card[]
+  recurrences   Recurrence[]
 }
 
 model RefreshToken {
@@ -80,27 +82,66 @@ model Category {
   transactions Transaction[]
   goals        Goal[]
 
-  @@index([userId, status])
   @@unique([userId, code])
+  @@index([userId, status])
 }
 
 model Transaction {
-  id            String        @id @default(uuid(7))
-  userId        String
-  categoryId    String
-  user          User          @relation(fields: [userId], references: [id])
-  category      Category      @relation(fields: [categoryId], references: [id])
-  type          CategoryType
-  description   String
-  date          DateTime
-  paymentMethod PaymentMethod
-  value         Decimal       @db.Decimal(15, 2)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                 String        @id @default(uuid(7))
+  userId             String
+  categoryId         String
+  user               User          @relation(fields: [userId], references: [id])
+  category           Category      @relation(fields: [categoryId], references: [id])
+  type               CategoryType
+  description        String
+  date               DateTime
+  paymentMethod      PaymentMethod
+  value              Decimal       @db.Decimal(15, 2)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  cardId             String?
+  card               Card?         @relation(fields: [cardId], references: [id])
+  installmentGroupId String?
+  installmentNumber  Int?
+  installmentCount   Int?
+  recurrenceId       String?
+  recurrence         Recurrence?   @relation(fields: [recurrenceId], references: [id])
 
   @@index([userId, date])
   @@index([userId, categoryId])
   @@index([userId, paymentMethod])
+  @@index([cardId, date])
+  @@index([installmentGroupId])
+  @@index([recurrenceId, date])
+}
+
+model Card {
+  id               String        @id @default(uuid(7))
+  userId           String
+  user             User          @relation(fields: [userId], references: [id])
+  name             String
+  closingDay       Int
+  dueDay           Int
+  isDefault        Boolean       @default(false)
+  status           Boolean       @default(true)
+  datesConfirmedAt DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  transactions     Transaction[]
+
+  @@index([userId, status])
+}
+
+model Recurrence {
+  id           String        @id @default(uuid(7))
+  userId       String
+  user         User          @relation(fields: [userId], references: [id])
+  endDate      DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@index([userId])
 }
 
 model Goal {

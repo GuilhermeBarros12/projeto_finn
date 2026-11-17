@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { Prisma, type Category, type Transaction } from "../../generated/prisma/client";
 import { AppError } from "../lib/app-error";
+import { addMonthsKeepingDay } from "../lib/billing-calendar";
 import { prisma } from "../lib/prisma";
 import type {
   CreateTransactionInput,
@@ -7,9 +9,13 @@ import type {
   TransactionListInput,
   UpdateTransactionInput,
 } from "../schemas/transaction.schema";
+import { CardService } from "./card.service";
 
 export type TransactionWithCategory = Prisma.TransactionGetPayload<{
-  include: { category: { select: { id: true; name: true; icon: true; color: true } } };
+  include: {
+    category: { select: { id: true; name: true; icon: true; color: true } };
+    card: { select: { id: true; name: true } };
+  };
 }>;
 
 export interface PaginatedTransactions {
@@ -18,16 +24,59 @@ export interface PaginatedTransactions {
 }
 
 const EXPORT_BATCH_SIZE = 500;
-const WITH_CATEGORY = {
+export const WITH_RELATIONS = {
   category: { select: { id: true, name: true, icon: true, color: true } },
+  card: { select: { id: true, name: true } },
 } as const;
+const RECURRENCE_MONTHS = 12;
+
+export type TransactionScope = "ONE" | "FOLLOWING";
 const NEWEST_FIRST: Prisma.TransactionOrderByWithRelationInput[] = [
   { date: "desc" },
   { createdAt: "desc" },
   { id: "desc" },
 ];
 
+/** Divide em centavos: no modo total o centavo que sobra vai para a primeira parcela. */
+const installmentCents = (
+  input: NonNullable<CreateTransactionInput["installments"]>,
+  value: number,
+): number[] => {
+  const cents = Math.round(value * 100);
+
+  if (input.valueMode === "PER_INSTALLMENT") {
+    return Array.from({ length: input.count }, () => cents);
+  }
+
+  if (cents < input.count) {
+    throw new AppError("O valor total não cobre uma parcela mínima de R$ 0,01.", 422);
+  }
+
+  const base = Math.floor(cents / input.count);
+  return Array.from({ length: input.count }, (_, index) =>
+    index === 0 ? base + (cents - base * input.count) : base,
+  );
+};
+
+const toDecimal = (cents: number): Prisma.Decimal => new Prisma.Decimal(cents).div(100);
+
 export class TransactionService {
+  constructor(private readonly cardService = new CardService()) {}
+
+  /** Cartão informado (validado) ou o padrão; só existe quando a origem é cartão de crédito. */
+  private async resolveCardId(
+    userId: string,
+    paymentMethod: string,
+    cardId: string | undefined,
+  ): Promise<string | null> {
+    if (paymentMethod !== "CREDIT_CARD") return null;
+    if (cardId) return (await this.cardService.getUsableCard(userId, cardId)).id;
+
+    const card = await this.cardService.getDefaultCard(userId);
+    if (!card) throw new AppError("Cadastre um cartão de crédito antes de lançar no crédito.", 422);
+    return card.id;
+  }
+
   private async getUsableCategory(userId: string, categoryId: string): Promise<Category> {
     const category = await prisma.category.findFirst({
       where: { id: categoryId, status: true, OR: [{ userId: null }, { userId }] },
@@ -61,6 +110,7 @@ export class TransactionService {
     if (input.categoryId) where.categoryId = input.categoryId;
     if (input.type) where.type = input.type;
     if (input.paymentMethod) where.paymentMethod = input.paymentMethod;
+    if (input.cardId) where.cardId = input.cardId;
     if (input.origin === "CREDIT_CARD") where.paymentMethod = "CREDIT_CARD";
     if (input.origin === "ACCOUNT") {
       where.paymentMethod = { in: ["PIX", "DEBIT_CARD", "CASH", "BANK_TRANSFER", "OTHER"] };
@@ -84,9 +134,74 @@ export class TransactionService {
     return where;
   }
 
-  async create(userId: string, input: CreateTransactionInput): Promise<Transaction> {
+  async create(userId: string, input: CreateTransactionInput): Promise<TransactionWithCategory[]> {
     await this.validateCategoryAndType(userId, input.categoryId, input.type);
-    return prisma.transaction.create({ data: { ...input, userId } });
+    const cardId = await this.resolveCardId(userId, input.paymentMethod, input.cardId);
+
+    const base = {
+      userId,
+      categoryId: input.categoryId,
+      type: input.type,
+      description: input.description,
+      paymentMethod: input.paymentMethod,
+      cardId,
+    };
+
+    if (input.mode === "INSTALLMENTS" && input.installments) {
+      const cents = installmentCents(input.installments, input.value);
+      const installmentGroupId = randomUUID();
+
+      return prisma.$transaction(async (tx) => {
+        const created: TransactionWithCategory[] = [];
+        for (const [index, amount] of cents.entries()) {
+          created.push(
+            await tx.transaction.create({
+              data: {
+                ...base,
+                date: addMonthsKeepingDay(input.date, index),
+                value: toDecimal(amount),
+                installmentGroupId,
+                installmentNumber: index + 1,
+                installmentCount: cents.length,
+              },
+              include: WITH_RELATIONS,
+            }),
+          );
+        }
+        return created;
+      });
+    }
+
+    if (input.mode === "RECURRING") {
+      const endDate = input.recurrence?.endDate ?? null;
+      const dates: Date[] = [];
+      for (let month = 0; month < RECURRENCE_MONTHS; month += 1) {
+        const date = addMonthsKeepingDay(input.date, month);
+        if (endDate && date > endDate) break;
+        dates.push(date);
+      }
+
+      return prisma.$transaction(async (tx) => {
+        const recurrence = await tx.recurrence.create({ data: { userId, endDate } });
+        const created: TransactionWithCategory[] = [];
+        for (const date of dates) {
+          created.push(
+            await tx.transaction.create({
+              data: { ...base, date, value: input.value, recurrenceId: recurrence.id },
+              include: WITH_RELATIONS,
+            }),
+          );
+        }
+        return created;
+      });
+    }
+
+    return [
+      await prisma.transaction.create({
+        data: { ...base, date: input.date, value: input.value },
+        include: WITH_RELATIONS,
+      }),
+    ];
   }
 
   async list(userId: string, input: TransactionListInput): Promise<PaginatedTransactions> {
@@ -98,7 +213,7 @@ export class TransactionService {
         orderBy: NEWEST_FIRST,
         skip: (input.page - 1) * input.limit,
         take: input.limit,
-        include: WITH_CATEGORY,
+        include: WITH_RELATIONS,
       }),
       prisma.transaction.count({ where }),
     ]);
@@ -127,7 +242,7 @@ export class TransactionService {
         where,
         orderBy: NEWEST_FIRST,
         take: EXPORT_BATCH_SIZE,
-        include: WITH_CATEGORY,
+        include: WITH_RELATIONS,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       });
 
@@ -139,11 +254,12 @@ export class TransactionService {
     }
   }
 
-  async update(
+  /** Lançamento âncora e filtro do escopo: só ele, ou ele e os seguintes do mesmo grupo. */
+  private async findScoped(
     userId: string,
     transactionId: string,
-    input: UpdateTransactionInput,
-  ): Promise<Transaction> {
+    scope: TransactionScope,
+  ): Promise<{ transaction: Transaction; where: Prisma.TransactionWhereInput; grouped: boolean }> {
     const transaction = await prisma.transaction.findFirst({
       where: { id: transactionId, userId },
     });
@@ -152,26 +268,106 @@ export class TransactionService {
       throw new AppError("Transação não encontrada.", 404);
     }
 
+    if (scope === "FOLLOWING") {
+      if (transaction.installmentGroupId && transaction.installmentNumber !== null) {
+        return {
+          transaction,
+          grouped: true,
+          where: {
+            userId,
+            installmentGroupId: transaction.installmentGroupId,
+            installmentNumber: { gte: transaction.installmentNumber },
+          },
+        };
+      }
+
+      if (transaction.recurrenceId) {
+        return {
+          transaction,
+          grouped: true,
+          where: {
+            userId,
+            recurrenceId: transaction.recurrenceId,
+            date: { gte: transaction.date },
+          },
+        };
+      }
+    }
+
+    return { transaction, grouped: false, where: { userId, id: transaction.id } };
+  }
+
+  async update(
+    userId: string,
+    transactionId: string,
+    input: UpdateTransactionInput,
+    scope: TransactionScope = "ONE",
+  ): Promise<{ transaction: TransactionWithCategory; updatedCount: number }> {
+    if (scope === "FOLLOWING" && input.date !== undefined) {
+      throw new AppError("Para mudar a data, edite um lançamento por vez.", 400);
+    }
+
+    const { transaction, where } = await this.findScoped(userId, transactionId, scope);
+
     const categoryId = input.categoryId ?? transaction.categoryId;
     const type = input.type ?? transaction.type;
+    const paymentMethod = input.paymentMethod ?? transaction.paymentMethod;
+
+    if (transaction.installmentGroupId && (type !== "EXPENSE" || paymentMethod !== "CREDIT_CARD")) {
+      throw new AppError("Parcelas precisam continuar como despesa no cartão de crédito.", 422);
+    }
+
+    if (input.cardId && paymentMethod !== "CREDIT_CARD") {
+      throw new AppError("cardId só é aceito quando a origem é cartão de crédito.", 400);
+    }
 
     // Só revalida o que mudou: desativar uma categoria não pode congelar o histórico dela.
     if (categoryId !== transaction.categoryId || type !== transaction.type) {
       await this.validateCategoryAndType(userId, categoryId, type);
     }
 
-    return prisma.transaction.update({ where: { id: transaction.id }, data: input });
-  }
+    // Cada lançamento mantém o próprio cartão, a menos que a origem ou o cartão mudem.
+    let cardChange: { cardId: string | null } | undefined;
 
-  async delete(userId: string, transactionId: string): Promise<void> {
-    const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, userId },
-    });
-
-    if (!transaction) {
-      throw new AppError("Transação não encontrada.", 404);
+    if (paymentMethod !== "CREDIT_CARD") {
+      cardChange = { cardId: null };
+    } else if (input.cardId && input.cardId !== transaction.cardId) {
+      cardChange = { cardId: (await this.cardService.getUsableCard(userId, input.cardId)).id };
+    } else if (!transaction.cardId) {
+      cardChange = { cardId: await this.resolveCardId(userId, paymentMethod, undefined) };
     }
 
-    await prisma.transaction.delete({ where: { id: transaction.id } });
+    const result = await prisma.transaction.updateMany({
+      where,
+      data: { ...input, ...cardChange },
+    });
+
+    const updated = await prisma.transaction.findFirstOrThrow({
+      where: { id: transaction.id, userId },
+      include: WITH_RELATIONS,
+    });
+
+    return { transaction: updated, updatedCount: result.count };
+  }
+
+  async delete(
+    userId: string,
+    transactionId: string,
+    scope: TransactionScope = "ONE",
+  ): Promise<void> {
+    const { transaction, where } = await this.findScoped(userId, transactionId, scope);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({ where });
+
+      if (transaction.recurrenceId) {
+        const remaining = await tx.transaction.count({
+          where: { recurrenceId: transaction.recurrenceId },
+        });
+        if (remaining === 0) {
+          await tx.recurrence.delete({ where: { id: transaction.recurrenceId } });
+        }
+      }
+    });
   }
 }

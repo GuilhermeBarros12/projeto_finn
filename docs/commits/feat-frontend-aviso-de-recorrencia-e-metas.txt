@@ -1,0 +1,21 @@
+Aviso de recorrência e calendário nas metas
+feat-frontend-aviso-de-recorrencia-e-metas
+
+Resumo
+O Dashboard avisa quando uma recorrência sem data final está para acabar e oferece renovar por
+12 meses ou deixar terminar. O GoalModal passa a usar o DatePicker no prazo. Etapa 11 de
+docs/planos/cartao-de-credito.md.
+
+Arquivos alterados
+- frontend/src/pages/DashboardPage.tsx: busca /recurrences/ending (falha silenciosa), renova ou encerra e recarrega os dados
+- frontend/src/components/GoalModal.tsx: DatePicker no lugar de input type="date"
+- frontend/src/pages/DashboardPage.test.tsx: aviso, renovação e encerramento
+
+Regras preservadas
+- O prazo da meta continua indo como AAAA-MM-DD.
+- Se o aviso falhar ao carregar, o painel não mostra erro por causa dele.
+
+Validação executada
+- npm run lint: sem erros
+- npm test --prefix frontend: 15 arquivos, 78 testes passando
+- npm run build --prefix frontend: sem erros

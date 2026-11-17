@@ -1,0 +1,26 @@
+API de cartões
+feat-api-cartoes
+
+Resumo
+CRUD de cartões por usuário com cartão padrão único, desativação em vez de exclusão e helpers
+getUsableCard e getDefaultCard para a etapa de lançamentos. Etapa 3 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- src/schemas/card.schema.ts: validação de criação, edição e listagem
+- src/services/card.service.ts: regras de padrão, desativação e cartão utilizável
+- src/controllers/card.controller.ts: controller no formato de category
+- src/routes/cards.routes.ts: GET, POST, PUT /:id, PATCH /:id/default e /:id/deactivate
+- tests/cards.test.ts: padrão, troca, desativação, dias iguais, datesConfirmedAt e listagem
+
+Arquivos alterados
+- src/routes/index.ts: monta /cards
+- tests/helpers.ts: helper createCard
+- tests/isolation.test.ts: Bob não lê, edita, torna padrão nem desativa cartão da Alice
+
+Regras preservadas
+- Toda consulta filtra por userId; cartões são desativados, não apagados.
+
+Validação executada
+- npm run check: sem erros
+- npm run lint: sem erros
+- npm test: 17 arquivos, 185 testes passando

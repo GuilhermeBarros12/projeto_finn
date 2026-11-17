@@ -4,6 +4,7 @@ import { agentTools } from "../src/services/agent-tools";
 import { textResponse, toolResponse } from "./fake-model";
 import {
   api,
+  createCard,
   createCategory,
   createTransaction,
   createUser,
@@ -60,6 +61,97 @@ describe("isolamento entre usuários", () => {
     expect(use.status).toBe(422);
     expect(deactivate.status).toBe(404);
     expect(list.body.categories).toEqual([]);
+  });
+
+  it("não deixa ler, editar, tornar padrão nem desativar cartão de outra pessoa", async () => {
+    const card = await createCard(alice.token);
+
+    const list = await api(bob.token).get("/api/cards?includeInactive=true");
+    const edit = await api(bob.token).put(`/api/cards/${card.id}`).send({ name: "Invadido" });
+    const makeDefault = await api(bob.token).patch(`/api/cards/${card.id}/default`);
+    const deactivate = await api(bob.token).patch(`/api/cards/${card.id}/deactivate`);
+    const original = await api(alice.token).get("/api/cards");
+
+    expect(list.body.cards).toEqual([]);
+    expect(edit.status).toBe(404);
+    expect(makeDefault.status).toBe(404);
+    expect(deactivate.status).toBe(404);
+    expect(original.body.cards[0].name).toBe("Cartão");
+    expect(original.body.cards[0].status).toBe(true);
+  });
+
+  it("não deixa ver, renovar, encerrar nem editar em grupo recorrência de outra pessoa", async () => {
+    await createCard(alice.token);
+    const created = await createTransaction(alice.token, aliceCategory.id, {
+      mode: "RECURRING",
+      date: "2026-01-10",
+    });
+    const recurrenceId = created.body.transaction.recurrenceId as string;
+    const transactionId = created.body.transaction.id as string;
+
+    const ending = await api(bob.token).get("/api/recurrences/ending");
+    const renew = await api(bob.token).post(`/api/recurrences/${recurrenceId}/renew`);
+    const finish = await api(bob.token).patch(`/api/recurrences/${recurrenceId}/finish`);
+    const edit = await api(bob.token)
+      .put(`/api/transactions/${transactionId}?scope=FOLLOWING`)
+      .send({ description: "invadido" });
+    const remove = await api(bob.token).delete(
+      `/api/transactions/${transactionId}?scope=FOLLOWING`,
+    );
+    const original = await api(alice.token).get("/api/transactions?limit=100");
+
+    expect(ending.body.recurrences).toEqual([]);
+    expect(renew.status).toBe(404);
+    expect(finish.status).toBe(404);
+    expect(edit.status).toBe(404);
+    expect(remove.status).toBe(404);
+    expect(original.body.meta.total).toBe(13);
+  });
+
+  it("não deixa ver fatura de cartão de outra pessoa", async () => {
+    const card = await createCard(alice.token);
+    await createTransaction(alice.token, aliceCategory.id, {
+      paymentMethod: "CREDIT_CARD",
+      cardId: card.id,
+    });
+
+    const current = await api(bob.token).get(`/api/cards/${card.id}/invoices/current`);
+    const month = await api(bob.token).get(`/api/cards/${card.id}/invoices/2026/4`);
+    const overview = await api(bob.token).get("/api/cards/overview");
+
+    expect(current.status).toBe(404);
+    expect(month.status).toBe(404);
+    expect(overview.body.cards).toEqual([]);
+  });
+
+  it("não deixa o assistente ler fatura de cartão de outra pessoa", async () => {
+    const card = await createCard(alice.token, { name: "Cartão secreto" });
+    await createTransaction(alice.token, aliceCategory.id, {
+      description: "Compra secreta",
+      paymentMethod: "CREDIT_CARD",
+      cardId: card.id,
+    });
+    vi.mocked(callModel)
+      .mockResolvedValueOnce(
+        toolResponse([
+          { name: "consultar_fatura", input: { cardId: card.id, month: null, year: null } },
+          { name: "listar_cartoes", input: {} },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Ok."));
+
+    await api(bob.token)
+      .post("/api/agent/chat")
+      .send({ messages: [{ role: "user", content: "Minha fatura?" }] });
+    const { messages } = vi.mocked(callModel).mock.calls.at(-1)?.[0] as {
+      messages: Array<{ content: unknown }>;
+    };
+    const results = messages.at(-1)?.content as Array<{ content: string; is_error: boolean }>;
+
+    expect(results[0]?.is_error).toBe(true);
+    expect(results[1]?.content).toBe("[]");
+    expect(JSON.stringify(results)).not.toContain("Cartão secreto");
+    expect(JSON.stringify(results)).not.toContain("Compra secreta");
   });
 
   it("não mistura valores no dashboard", async () => {

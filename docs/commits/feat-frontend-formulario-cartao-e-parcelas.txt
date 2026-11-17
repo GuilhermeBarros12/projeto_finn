@@ -1,0 +1,22 @@
+Formulário de lançamento com cartão, parcelas e recorrência
+feat-frontend-formulario-cartao-e-parcelas
+
+Resumo
+O TransactionModal troca o input de data pelo DatePicker, escolhe o cartão (padrão marcado),
+oferece os modos à vista, parcelado e recorrente com preview das parcelas, e na edição de
+lançamento em grupo pergunta "Só este" ou "Este e os seguintes". Etapa 8 de docs/planos/cartao-de-credito.md.
+
+Arquivos alterados
+- frontend/src/components/TransactionModal.tsx: cartão, modos, preview em centavos (mesma regra da API), data final, escopo e props defaultOrigin e defaultCardId
+- frontend/src/components/TransactionModal.test.tsx: cartão padrão, preview 33,34/33,33/33,33, PER_INSTALLMENT, recorrência, receita sem Parcelado e scope=FOLLOWING sem data
+- frontend/src/pages/DashboardPage.tsx, frontend/src/pages/TransactionsPage.tsx: repassam cards ao modal
+
+Regras preservadas
+- cardId só é enviado no crédito; mode, installments e recurrence só na criação.
+- Com "Este e os seguintes" a data fica desabilitada e não é enviada.
+- Sem cartão ativo o formulário avisa, com link para /cartoes, e bloqueia o salvamento.
+
+Validação executada
+- npm run lint: sem erros
+- npm test --prefix frontend: 13 arquivos, 64 testes passando
+- npm run build --prefix frontend: sem erros

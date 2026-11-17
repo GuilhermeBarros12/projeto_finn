@@ -3,9 +3,11 @@ import { Download, Plus } from "lucide-react";
 import { api } from "../api";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { TransactionBadges, originLabel } from "../components/TransactionBadges";
 import { TransactionModal } from "../components/TransactionModal";
 import { apiErrorMessage, currentMonth, formatDate, money } from "../lib/format";
 import type {
+  Card,
   Category,
   CategoryTotal,
   OriginTotals,
@@ -50,13 +52,16 @@ const downloadBlob = (blob: Blob, filename: string): void => {
 interface TransactionsPageProps {
   type: TransactionType;
   categories: Category[];
+  cards?: Card[];
+  refreshCards?: () => Promise<void>;
 }
 
-export default function TransactionsPage({ type, categories }: TransactionsPageProps) {
+export default function TransactionsPage({ type, categories, cards = [] }: TransactionsPageProps) {
   const [month, setMonth] = useState(() => String(currentMonth().month));
   const [year, setYear] = useState(() => String(currentMonth().year));
   const [categoryId, setCategoryId] = useState("");
   const [origin, setOrigin] = useState("");
+  const [cardId, setCardId] = useState("");
   const [page, setPage] = useState(1);
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -81,6 +86,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
     year,
     ...(categoryId ? { categoryId } : {}),
     ...(origin ? { origin } : {}),
+    ...(origin === "CREDIT_CARD" && cardId ? { cardId } : {}),
   };
   const filterKey = JSON.stringify(filters);
 
@@ -150,9 +156,9 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
     }
   };
 
-  const confirmRemoval = async () => {
+  const confirmRemoval = async (scope?: string) => {
     if (!removing) return;
-    await api.delete(`/transactions/${removing.id}`);
+    await api.delete(`/transactions/${removing.id}`, scope ? { params: { scope } } : undefined);
     setRemoving(undefined);
     if (transactions.length === 1 && page > 1) setPage(page - 1);
     else reload();
@@ -229,11 +235,29 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
             aria-label="Origem"
             className={inputClass}
             value={origin}
-            onChange={(event) => updateFilter(setOrigin)(event.target.value)}
+            onChange={(event) => {
+              updateFilter(setOrigin)(event.target.value);
+              setCardId("");
+            }}
           >
             <option value="">Todas as origens</option>
             <option value="ACCOUNT">Conta corrente</option>
             <option value="CREDIT_CARD">Cartão de crédito</option>
+          </select>
+        )}
+        {type === "EXPENSE" && origin === "CREDIT_CARD" && (
+          <select
+            aria-label="Cartão"
+            className={inputClass}
+            value={cardId}
+            onChange={(event) => updateFilter(setCardId)(event.target.value)}
+          >
+            <option value="">Todos os cartões</option>
+            {cards.map((card) => (
+              <option value={card.id} key={card.id}>
+                {card.status ? card.name : `${card.name} (desativado)`}
+              </option>
+            ))}
           </select>
         )}
       </section>
@@ -291,7 +315,10 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
                     key={transaction.id}
                   >
                     <span>
-                      <b className="block">{transaction.description}</b>
+                      <b className="block">
+                        {transaction.description}
+                        <TransactionBadges transaction={transaction} />
+                      </b>
                       <small className="text-slate-500">{formatDate(transaction.date)}</small>
                     </span>
                     <span className="flex items-center gap-2">
@@ -300,9 +327,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
                       </span>
                       {transaction.category.name}
                     </span>
-                    <span className="text-sm text-slate-500">
-                      {transaction.paymentMethod === "CREDIT_CARD" ? "Cartão" : "Conta"}
-                    </span>
+                    <span className="text-sm text-slate-500">{originLabel(transaction)}</span>
                     <span className="font-semibold">{money(transaction.value)}</span>
                     <span className="flex gap-2">
                       <button
@@ -350,6 +375,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
       {(creating || editing) && (
         <TransactionModal
           categories={categories}
+          cards={cards}
           initial={editing}
           defaultType={type}
           onClose={() => {
@@ -363,6 +389,14 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
         <ConfirmDialog
           title="Excluir lançamento"
           message={`"${removing.description}" será excluído definitivamente.`}
+          {...(removing.installmentGroupId || removing.recurrenceId
+            ? {
+                options: [
+                  { label: "Só este", value: "ONE" },
+                  { label: "Este e os seguintes", value: "FOLLOWING" },
+                ],
+              }
+            : {})}
           onCancel={() => setRemoving(undefined)}
           onConfirm={confirmRemoval}
         />

@@ -1,0 +1,13 @@
+Documentação do cartão de crédito
+docs-cartao-de-credito
+
+Resumo
+Registra no CLAUDE.md a regra de cartões e faturas e acrescenta a funcionalidade e as rotas novas
+ao README. Etapa 13 de docs/planos/cartao-de-credito.md.
+
+Arquivos alterados
+- CLAUDE.md: regra transversal "Cartões e faturas" (cálculo em billing-calendar, mês do vencimento, parcelas e recorrências como transações reais, CREDIT_CARD sempre com cardId)
+- README.md: funcionalidades de cartão, parcelas e recorrência, e rotas de cartões, faturas e recorrências
+
+Validação executada
+- npx prettier --check em CLAUDE.md e README.md: formatados (npm run format:check ainda lista 17 arquivos de configuração que não foram tocados, só por fim de linha CRLF no Windows)

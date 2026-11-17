@@ -9,6 +9,7 @@ import { agentTools } from "../src/services/agent-tools";
 import { question, refusalResponse, textResponse, toolResponse } from "./fake-model";
 import {
   api,
+  createCard,
   createCategory,
   createTransaction,
   createUser,
@@ -117,6 +118,60 @@ describe("chat do assistente", () => {
     });
   });
 
+  it("consulta cartões e faturas com os totais certos", async () => {
+    const card = await createCard(user.token, { name: "Nubank", closingDay: 25, dueDay: 5 });
+    await createTransaction(user.token, category.id, {
+      description: "Notebook",
+      value: 300,
+      date: "2026-03-10",
+      paymentMethod: "CREDIT_CARD",
+      mode: "INSTALLMENTS",
+      installments: { count: 3, valueMode: "TOTAL" },
+    });
+    model
+      .mockResolvedValueOnce(
+        toolResponse([
+          { name: "listar_cartoes", input: {} },
+          { name: "consultar_fatura", input: { cardId: null, month: 5, year: 2026 } },
+          { name: "consultar_fatura", input: { cardId: null, month: 5, year: null } },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Pronto."));
+
+    await ask();
+    const [cartoes, fatura, invalida] = toolResultsOf(1);
+
+    expect(JSON.parse(cartoes?.content ?? "")).toEqual([
+      { id: card.id, nome: "Nubank", diaFechamento: 25, diaVencimento: 5, padrao: true },
+    ]);
+    const { faturas } = JSON.parse(fatura?.content ?? "");
+    expect(faturas).toHaveLength(1);
+    expect(faturas[0]).toMatchObject({
+      cartao: "Nubank",
+      vencimento: "2026-05-05",
+      fechamento: "2026-04-25",
+      total: 100,
+      lancamentos: [{ data: "2026-04-10", descricao: "Notebook", valor: 100, parcela: "2/3" }],
+    });
+    expect(invalida?.is_error).toBe(true);
+  });
+
+  it("consultar_fatura sem cartão devolve erro ao modelo", async () => {
+    model
+      .mockResolvedValueOnce(
+        toolResponse([
+          { name: "consultar_fatura", input: { cardId: null, month: null, year: null } },
+        ]),
+      )
+      .mockResolvedValueOnce(textResponse("Ok."));
+
+    await ask();
+    const [result] = toolResultsOf(1);
+
+    expect(result?.is_error).toBe(true);
+    expect(result?.content).toContain("cartão");
+  });
+
   it("não envia nome nem e-mail da pessoa ao modelo", async () => {
     model
       .mockResolvedValueOnce(toolResponse([{ name: "listar_categorias", input: {} }]))
@@ -163,7 +218,9 @@ describe("chat do assistente", () => {
 
     expect(model.mock.calls[0]?.[0].tools.map((tool) => tool.name).sort()).toEqual([
       "buscar_lancamentos",
+      "consultar_fatura",
       "consultar_resumo_mes",
+      "listar_cartoes",
       "listar_categorias",
       "listar_metas",
     ]);

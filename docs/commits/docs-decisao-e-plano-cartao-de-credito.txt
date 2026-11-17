@@ -1,0 +1,13 @@
+Decisões e plano do cartão de crédito
+docs-decisao-e-plano-cartao-de-credito
+
+Resumo
+Registra as decisões da sabatina sobre cartões, faturas, parcelamento e recorrência, e o plano de
+implementação em 13 etapas que guiou a branch feat-cartao-de-credito.
+
+Arquivos criados
+- docs/decisoes/2026-11-16-cartao-de-credito.md: decisões, regras de calendário, decisões tomadas no plano e o que ficou fora desta versão
+- docs/planos/cartao-de-credito.md: passo a passo por etapa, com arquivos, rotas, regras, testes e checagens
+
+Validação executada
+- npx prettier --check docs/decisoes docs/planos: formatados

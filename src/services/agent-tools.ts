@@ -1,20 +1,37 @@
 import { ZodError, z } from "zod";
 import { AppError } from "../lib/app-error";
 import type { AgentTool } from "../lib/agent-model";
+import { shiftInvoiceRef } from "../lib/billing-calendar";
 import { dashboardPeriodSchema } from "../schemas/dashboard.schema";
 import { goalListSchema } from "../schemas/goal.schema";
 import { transactionListSchema } from "../schemas/transaction.schema";
+import { CardService } from "./card.service";
 import { CategoryService } from "./category.service";
 import { DashboardService } from "./dashboard.service";
 import { GoalService } from "./goal.service";
+import { InvoiceService, type Invoice } from "./invoice.service";
 import { TransactionService } from "./transaction.service";
 
+const cardService = new CardService();
 const categoryService = new CategoryService();
 const dashboardService = new DashboardService();
 const goalService = new GoalService();
+const invoiceService = new InvoiceService();
 const transactionService = new TransactionService();
 
 const MAX_TRANSACTIONS_PER_PAGE = 50;
+const MAX_INVOICE_TRANSACTIONS = 50;
+
+const invoiceQuerySchema = z
+  .object({
+    cardId: z.uuid().optional(),
+    month: z.number().int().min(1).max(12).optional(),
+    year: z.number().int().min(2000).max(2100).optional(),
+  })
+  .refine((query) => (query.month === undefined) === (query.year === undefined), {
+    message: "Informe month e year juntos, ou nenhum dos dois.",
+    path: ["month"],
+  });
 
 const nullableInteger = { type: ["integer", "null"] };
 
@@ -75,6 +92,29 @@ export const agentTools: AgentTool[] = [
       additionalProperties: false,
     },
   },
+  {
+    name: "listar_cartoes",
+    description:
+      "Lista os cartões de crédito ativos da pessoa, com id, nome, dia de fechamento, dia de vencimento e se é o padrão.",
+    strict: true,
+    input_schema: { type: "object", properties: {}, required: [], additionalProperties: false },
+  },
+  {
+    name: "consultar_fatura",
+    description:
+      "Consulta a fatura de um cartão de crédito. A fatura é identificada pelo MÊS DO VENCIMENTO: 'a fatura do mês que vem' é a que vence no mês que vem. Sem month e year, devolve a fatura atual (a que receberia uma compra de hoje) e a próxima. Com month e year, devolve a fatura que vence naquele mês. Sem cardId, usa o cartão padrão. Use null nos filtros que não se aplicam.",
+    strict: true,
+    input_schema: {
+      type: "object",
+      properties: {
+        cardId: { type: ["string", "null"], description: "Id vindo de listar_cartoes." },
+        month: { type: ["integer", "null"], description: "Mês do vencimento, de 1 a 12." },
+        year: { type: ["integer", "null"], description: "Ano do vencimento, com quatro dígitos." },
+      },
+      required: ["cardId", "month", "year"],
+      additionalProperties: false,
+    },
+  },
 ];
 
 const inputSchema = z.record(z.string(), z.unknown());
@@ -85,6 +125,25 @@ const withoutNulls = (input: unknown): Record<string, unknown> =>
   );
 
 const toCalendarDate = (date: Date): string => date.toISOString().slice(0, 10);
+
+const describeInvoice = (invoice: Invoice) => ({
+  cartao: invoice.card.name,
+  vencimento: invoice.dueDate,
+  fechamento: invoice.closingDate,
+  periodo: { inicio: invoice.start, fim: invoice.end },
+  situacao: invoice.status,
+  total: invoice.total,
+  totalLancamentos: invoice.transactionsCount,
+  lancamentos: invoice.transactions.slice(0, MAX_INVOICE_TRANSACTIONS).map((transaction) => ({
+    data: toCalendarDate(transaction.date),
+    descricao: transaction.description,
+    valor: transaction.value.toNumber(),
+    parcela:
+      transaction.installmentNumber !== null && transaction.installmentCount !== null
+        ? `${transaction.installmentNumber}/${transaction.installmentCount}`
+        : null,
+  })),
+});
 
 type Executor = (userId: string, input: unknown) => Promise<unknown>;
 
@@ -141,6 +200,40 @@ const executors = new Map<string, Executor>([
           formaDePagamento: transaction.paymentMethod,
         })),
       };
+    },
+  ],
+  [
+    "listar_cartoes",
+    async (userId) =>
+      (await cardService.list(userId)).map((card) => ({
+        id: card.id,
+        nome: card.name,
+        diaFechamento: card.closingDay,
+        diaVencimento: card.dueDay,
+        padrao: card.isDefault,
+      })),
+  ],
+  [
+    "consultar_fatura",
+    async (userId, input) => {
+      const query = invoiceQuerySchema.parse(withoutNulls(input));
+      const cardId = query.cardId ?? (await cardService.getDefaultCard(userId))?.id;
+
+      if (!cardId) {
+        throw new AppError("A pessoa não tem cartão de crédito ativo cadastrado.", 422);
+      }
+
+      if (query.month !== undefined && query.year !== undefined) {
+        const invoice = await invoiceService.invoice(userId, cardId, {
+          year: query.year,
+          month: query.month,
+        });
+        return { faturas: [describeInvoice(invoice)] };
+      }
+
+      const current = await invoiceService.current(userId, cardId);
+      const next = await invoiceService.invoice(userId, cardId, shiftInvoiceRef(current.ref, 1));
+      return { faturas: [describeInvoice(current), describeInvoice(next)] };
     },
   ],
   [
