@@ -55,7 +55,7 @@ interface TransactionsPageProps {
   refreshCards?: () => Promise<void>;
 }
 
-export default function TransactionsPage({ type, categories }: TransactionsPageProps) {
+export default function TransactionsPage({ type, categories, cards = [] }: TransactionsPageProps) {
   const [month, setMonth] = useState(() => String(currentMonth().month));
   const [year, setYear] = useState(() => String(currentMonth().year));
   const [categoryId, setCategoryId] = useState("");
@@ -353,6 +353,7 @@ export default function TransactionsPage({ type, categories }: TransactionsPageP
       {(creating || editing) && (
         <TransactionModal
           categories={categories}
+          cards={cards}
           initial={editing}
           defaultType={type}
           onClose={() => {

@@ -14,7 +14,11 @@ interface DashboardPageProps {
   onCategories: () => void;
 }
 
-export default function DashboardPage({ categories, onCategories }: DashboardPageProps) {
+export default function DashboardPage({
+  categories,
+  cards = [],
+  onCategories,
+}: DashboardPageProps) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -116,6 +120,7 @@ export default function DashboardPage({ categories, onCategories }: DashboardPag
       {newTransaction && (
         <TransactionModal
           categories={categories}
+          cards={cards}
           defaultType={newTransaction}
           onClose={() => setNewTransaction(null)}
           onSaved={load}

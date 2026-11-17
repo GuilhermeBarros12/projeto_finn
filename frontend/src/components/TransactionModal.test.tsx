@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "../api";
-import type { Category, Transaction } from "../types";
+import type { Card, Category, Transaction } from "../types";
 import { TransactionModal } from "./TransactionModal";
 
 vi.mock("../api", () => ({ api: { post: vi.fn(), put: vi.fn() } }));
@@ -62,7 +62,7 @@ describe("TransactionModal", () => {
     render(<TransactionModal categories={categories} onClose={vi.fn()} onSaved={vi.fn()} />);
     vi.useRealTimers();
 
-    expect(screen.getByLabelText("Data")).toHaveValue("2026-11-05");
+    expect(screen.getByRole("button", { name: "Data" })).toHaveTextContent("qui, 05/11/2026");
   });
 
   it("salva transação de categoria desativada sem trocar a categoria (bug 5)", async () => {
@@ -120,5 +120,166 @@ describe("TransactionModal", () => {
     await userEvent.keyboard("{Escape}");
 
     expect(onClose).toHaveBeenCalled();
+  });
+
+  describe("cartão, parcelas e recorrência", () => {
+    const card = (id: string, name: string, isDefault = false, status = true): Card => ({
+      id,
+      name,
+      closingDay: 25,
+      dueDay: 5,
+      isDefault,
+      status,
+      datesConfirmedAt: "2026-01-01T00:00:00.000Z",
+    });
+    const cards = [card("c1", "Nubank"), card("c2", "Itaú", true)];
+
+    const fillBasics = async (value = "10000") => {
+      await userEvent.type(screen.getByLabelText("Descrição"), "Notebook");
+      await userEvent.type(screen.getByLabelText("Valor em reais"), value);
+      fireEvent.change(screen.getByLabelText("Categoria"), { target: { value: "gasto" } });
+    };
+
+    const renderCredit = (extra: Partial<Parameters<typeof TransactionModal>[0]> = {}) =>
+      render(
+        <TransactionModal
+          categories={categories}
+          cards={cards}
+          defaultOrigin="CREDIT_CARD"
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+          {...extra}
+        />,
+      );
+
+    it("pré-seleciona o cartão padrão quando a origem é cartão", () => {
+      renderCredit();
+
+      expect(screen.getByLabelText("Cartão")).toHaveDisplayValue("Itaú");
+    });
+
+    it("sem cartão ativo, avisa e bloqueia o salvamento", () => {
+      renderCredit({ cards: [] });
+
+      expect(screen.getByRole("status")).toHaveTextContent("Cadastre um cartão");
+      expect(screen.getByRole("button", { name: "Salvar transação" })).toBeDisabled();
+    });
+
+    it("receita não oferece Parcelado", async () => {
+      renderCredit();
+      expect(screen.getByRole("button", { name: "Parcelado" })).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+
+      expect(screen.queryByRole("button", { name: "Parcelado" })).not.toBeInTheDocument();
+    });
+
+    it("mostra o preview de R$ 100,00 em 3x e envia o corpo esperado", async () => {
+      vi.mocked(api.post).mockResolvedValue({});
+      renderCredit();
+      await fillBasics();
+      await userEvent.click(screen.getByRole("button", { name: "Parcelado" }));
+      fireEvent.change(screen.getByLabelText("Número de parcelas"), { target: { value: "3" } });
+
+      const items = screen.getAllByText(/^\d\/3 · /).map((item) => item.textContent ?? "");
+      expect(items).toHaveLength(3);
+      expect(items[0]).toMatch(/^1\/3 · \d{2}\/\d{2}\/\d{4} · R\$\s33,34$/);
+      expect(items[1]).toMatch(/R\$\s33,33$/);
+      expect(items[2]).toMatch(/R\$\s33,33$/);
+      expect(screen.getByText(/Total: R\$\s100,00/)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
+
+      await waitFor(() => expect(api.post).toHaveBeenCalled());
+      expect(api.post).toHaveBeenCalledWith(
+        "/transactions",
+        expect.objectContaining({
+          value: 100,
+          paymentMethod: "CREDIT_CARD",
+          cardId: "c2",
+          mode: "INSTALLMENTS",
+          installments: { count: 3, valueMode: "TOTAL" },
+        }),
+      );
+    });
+
+    it("envia PER_INSTALLMENT no modo valor da parcela", async () => {
+      vi.mocked(api.post).mockResolvedValue({});
+      renderCredit();
+      await fillBasics("5000");
+      await userEvent.click(screen.getByRole("button", { name: "Parcelado" }));
+      await userEvent.click(screen.getByRole("radio", { name: "Valor da parcela" }));
+      fireEvent.change(screen.getByLabelText("Número de parcelas"), { target: { value: "4" } });
+
+      expect(screen.getByLabelText("Valor de cada parcela")).toBeInTheDocument();
+      expect(screen.getByText(/Total: R\$\s200,00/)).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
+
+      await waitFor(() => expect(api.post).toHaveBeenCalled());
+      expect(api.post).toHaveBeenCalledWith(
+        "/transactions",
+        expect.objectContaining({
+          value: 50,
+          installments: { count: 4, valueMode: "PER_INSTALLMENT" },
+        }),
+      );
+    });
+
+    it("recorrente envia mode e a data final quando definida", async () => {
+      vi.mocked(api.post).mockResolvedValue({});
+      render(<TransactionModal categories={categories} onClose={vi.fn()} onSaved={vi.fn()} />);
+      await fillBasics();
+      await userEvent.click(screen.getByRole("button", { name: "Recorrente" }));
+
+      expect(screen.getByText("Repete todo mês, por 12 meses.")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("button", { name: "Definir data final" }));
+      await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
+
+      await waitFor(() => expect(api.post).toHaveBeenCalled());
+      const body = vi.mocked(api.post).mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(body.mode).toBe("RECURRING");
+      expect(body.recurrence).toEqual({ endDate: body.date });
+      expect(body).not.toHaveProperty("cardId");
+    });
+
+    it("editar a parcela 2 de 5 com 'Este e os seguintes' envia scope=FOLLOWING sem a data", async () => {
+      vi.mocked(api.put).mockResolvedValue({});
+      const parcela: Transaction = {
+        ...inactiveTransaction,
+        categoryId: "gasto",
+        category: { id: "gasto", name: "Categoria gasto", icon: "Tag", color: "#000000" },
+        paymentMethod: "CREDIT_CARD",
+        cardId: "c1",
+        card: { id: "c1", name: "Nubank" },
+        installmentGroupId: "g1",
+        installmentNumber: 2,
+        installmentCount: 5,
+      };
+      render(
+        <TransactionModal
+          categories={categories}
+          cards={cards}
+          initial={parcela}
+          onClose={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText("Parcela 2 de 5")).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("radio", { name: "Este e os seguintes" }));
+      expect(screen.getByRole("button", { name: "Data" })).toBeDisabled();
+      await userEvent.click(screen.getByRole("button", { name: "Salvar transação" }));
+
+      await waitFor(() => expect(api.put).toHaveBeenCalled());
+      const [url, body, config] = vi.mocked(api.put).mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+        unknown,
+      ];
+      expect(url).toBe("/transactions/t1");
+      expect(body).not.toHaveProperty("date");
+      expect(config).toEqual({ params: { scope: "FOLLOWING" } });
+    });
   });
 });
