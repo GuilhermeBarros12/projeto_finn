@@ -57,6 +57,16 @@ beforeEach(() => {
   }) as never);
 });
 
+const mockList = (item: Record<string, unknown>) => {
+  const original = vi.mocked(api.get).getMockImplementation();
+  vi.mocked(api.get).mockImplementation((async (url: string, ...rest: unknown[]) => {
+    if (url === "/transactions") {
+      return { data: { data: [item], meta: { page: 1, limit: 20, total: 1, totalPages: 1 } } };
+    }
+    return (original as (...args: unknown[]) => unknown)(url, ...rest);
+  }) as never);
+};
+
 const renderPage = () =>
   render(
     <TransactionsPage
@@ -106,5 +116,47 @@ describe("TransactionsPage", () => {
 
     expect(screen.getByRole("option", { name: "Antiga (desativada)" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "Mercado" })).toBeInTheDocument();
+  });
+
+  it("mostra o selo da parcela e o nome do cartão", async () => {
+    mockList({
+      ...transaction,
+      paymentMethod: "CREDIT_CARD",
+      cardId: "k1",
+      card: { id: "k1", name: "Nubank" },
+      installmentGroupId: "g1",
+      installmentNumber: 2,
+      installmentCount: 5,
+    });
+    renderPage();
+
+    expect(await screen.findByText("2/5")).toBeInTheDocument();
+    expect(screen.getByText("Nubank")).toBeInTheDocument();
+  });
+
+  it("excluir uma parcela com 'Este e os seguintes' envia scope=FOLLOWING", async () => {
+    vi.mocked(api.delete).mockResolvedValue({});
+    mockList({
+      ...transaction,
+      installmentGroupId: "g1",
+      installmentNumber: 2,
+      installmentCount: 5,
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Excluir" }));
+    await userEvent.click(screen.getByRole("button", { name: "Este e os seguintes" }));
+
+    expect(api.delete).toHaveBeenCalledWith("/transactions/t1", { params: { scope: "FOLLOWING" } });
+  });
+
+  it("excluir lançamento comum não pergunta o escopo", async () => {
+    vi.mocked(api.delete).mockResolvedValue({});
+    renderPage();
+
+    await userEvent.click(await screen.findByRole("button", { name: "Excluir" }));
+    await userEvent.click(screen.getAllByRole("button", { name: "Excluir" }).at(-1) as HTMLElement);
+
+    expect(api.delete).toHaveBeenCalledWith("/transactions/t1", undefined);
   });
 });

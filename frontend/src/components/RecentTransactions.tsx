@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { money } from "../lib/format";
 import type { Transaction } from "../types";
 import { CategoryIcon } from "./CategoryIcon";
+import { TransactionBadges, originLabel } from "./TransactionBadges";
 
 interface RecentTransactionsProps {
   transactions: Transaction[];
@@ -47,10 +48,12 @@ export function RecentTransactions({ transactions, loading }: RecentTransactions
                 <CategoryIcon icon={transaction.category.icon} />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-slate-800">{transaction.description}</p>
+                <p className="truncate font-semibold text-slate-800">
+                  {transaction.description}
+                  <TransactionBadges transaction={transaction} />
+                </p>
                 <p className="mt-0.5 text-sm text-slate-500">
-                  {transaction.category.name} ·{" "}
-                  {transaction.paymentMethod === "CREDIT_CARD" ? "Cartão" : "Conta"}
+                  {transaction.category.name} · {originLabel(transaction)}
                 </p>
               </div>
               <div

@@ -1,0 +1,24 @@
+Lista de lançamentos com parcelas e escopo de exclusão
+feat-frontend-lista-com-parcelas-e-escopo
+
+Resumo
+A lista mostra o selo "2/5" nas parcelas, o ícone de recorrência e o nome do cartão no lugar de
+"Cartão". Excluir lançamento em grupo pergunta "Só este" ou "Este e os seguintes", e a página
+ganha o filtro de cartão. Etapa 9 de docs/planos/cartao-de-credito.md.
+
+Arquivos criados
+- frontend/src/components/TransactionBadges.tsx: selo de parcela, ícone Repeat e originLabel
+
+Arquivos alterados
+- frontend/src/components/ConfirmDialog.tsx: prop opcional options; onConfirm recebe o valor escolhido (sem options nada muda)
+- frontend/src/pages/TransactionsPage.tsx: selos, nome do cartão, filtro Cartão e DELETE com scope
+- frontend/src/components/RecentTransactions.tsx: selos e nome do cartão
+- frontend/src/pages/TransactionsPage.test.tsx: selo 2/5, exclusão com scope=FOLLOWING e exclusão comum
+
+Regras preservadas
+- Exclusão de lançamento comum continua sem escopo (DELETE sem query).
+
+Validação executada
+- npm run lint: sem erros
+- npm test --prefix frontend: 13 arquivos, 67 testes passando
+- npm run build --prefix frontend: sem erros
