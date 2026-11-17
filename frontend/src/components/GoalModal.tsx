@@ -4,6 +4,7 @@ import { cn } from "../lib/cn";
 import { apiErrorMessage, todayInput, toDateInput } from "../lib/format";
 import type { Category, Goal, GoalStatus, GoalType } from "../types";
 import { CurrencyInput, fromCents, toCents } from "./CurrencyInput";
+import { DatePicker } from "./DatePicker";
 import { Modal } from "./Modal";
 
 const inputClass =
@@ -110,16 +111,12 @@ export function GoalModal({ categories, initial, onClose, onSaved }: GoalModalPr
           cents={cents}
           onChange={setCents}
         />
-        <label className="block text-sm font-semibold text-slate-700">
+        <div className="block text-sm font-semibold text-slate-700">
           Prazo
-          <input
-            className={cn(inputClass, "mt-1 font-normal")}
-            type="date"
-            required
-            value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
-          />
-        </label>
+          <div className="mt-1 font-normal">
+            <DatePicker name="dueDate" label="Prazo" value={dueDate} onChange={setDueDate} />
+          </div>
+        </div>
         {type === "SPENDING_LIMIT" && (
           <select
             aria-label="Categoria"

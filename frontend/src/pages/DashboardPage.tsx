@@ -5,7 +5,14 @@ import { RecentTransactions } from "../components/RecentTransactions";
 import { StatCard } from "../components/StatCard";
 import { TransactionModal } from "../components/TransactionModal";
 import { apiErrorMessage, currentMonth, money } from "../lib/format";
-import type { Card, Category, Summary, Transaction, TransactionType } from "../types";
+import type {
+  Card,
+  Category,
+  EndingRecurrence,
+  Summary,
+  Transaction,
+  TransactionType,
+} from "../types";
 
 interface DashboardPageProps {
   categories: Category[];
@@ -50,6 +57,36 @@ export default function DashboardPage({
     void load();
   }, [load]);
 
+  const [ending, setEnding] = useState<EndingRecurrence[]>([]);
+  const [endingError, setEndingError] = useState("");
+
+  // O aviso é um extra: se falhar, o painel segue sem ele.
+  const loadEnding = useCallback(async () => {
+    try {
+      const response = await api.get<{ recurrences: EndingRecurrence[] }>("/recurrences/ending");
+      setEnding(response.data.recurrences ?? []);
+    } catch {
+      setEnding([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadEnding();
+  }, [loadEnding]);
+
+  const resolveRecurrence = async (recurrence: EndingRecurrence, action: "renew" | "finish") => {
+    setEndingError("");
+
+    try {
+      if (action === "renew") await api.post(`/recurrences/${recurrence.id}/renew`);
+      else await api.patch(`/recurrences/${recurrence.id}/finish`);
+      setEnding((current) => current.filter(({ id }) => id !== recurrence.id));
+      void load();
+    } catch (requestError) {
+      setEndingError(apiErrorMessage(requestError, "Não foi possível atualizar a recorrência."));
+    }
+  };
+
   const balance = summary?.netBalance ?? 0;
 
   return (
@@ -80,6 +117,36 @@ export default function DashboardPage({
       {error && (
         <p role="alert" className="mb-5 rounded-2xl bg-rose-50 px-5 py-4 text-sm text-rose-700">
           {error}
+        </p>
+      )}
+      {ending.map((recurrence) => (
+        <div
+          key={recurrence.id}
+          className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-amber-50 px-5 py-4 text-sm text-amber-900"
+        >
+          <span>
+            {recurrence.description} termina em {recurrence.lastDate.slice(5, 7)}/
+            {recurrence.lastDate.slice(0, 4)}.
+          </span>
+          <span className="flex gap-2">
+            <button
+              onClick={() => void resolveRecurrence(recurrence, "renew")}
+              className="rounded-full bg-white px-4 py-2 font-semibold hover:bg-amber-100"
+            >
+              Renovar por 12 meses
+            </button>
+            <button
+              onClick={() => void resolveRecurrence(recurrence, "finish")}
+              className="rounded-full px-4 py-2 font-semibold hover:bg-amber-100"
+            >
+              Deixar terminar
+            </button>
+          </span>
+        </div>
+      ))}
+      {endingError && (
+        <p role="alert" className="mb-5 rounded-2xl bg-rose-50 px-5 py-4 text-sm text-rose-700">
+          {endingError}
         </p>
       )}
       <section className="grid gap-4 md:grid-cols-3">
