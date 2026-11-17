@@ -73,6 +73,13 @@ sob `/api`.
   frontend (`frontend/src/api.ts`, nunca em `localStorage`). O refresh token fica em cookie HttpOnly
   `SameSite=Strict`, é guardado como hash e roda a cada uso. Reutilizar um token antigo fora da janela
   de 30 s derruba toda a família (`auth.service.ts`).
+- **Cartões e faturas:** a fatura não é guardada: `src/lib/billing-calendar.ts` a calcula a partir
+  de `closingDay` e `dueDay` do cartão, e ela é identificada pelo mês do **vencimento** ("fatura de
+  abril" é a que vence em abril). Compra no dia do fechamento vai para a fatura seguinte. Parcelas e
+  recorrências são transações reais, agrupadas por `installmentGroupId` e `recurrenceId`
+  (`scope=FOLLOWING` age no lançamento e nos seguintes do grupo). Todo lançamento `CREDIT_CARD` tem
+  `cardId`, garantido por um `CHECK` no banco. O dashboard e as metas continuam agregando pela
+  data de cada lançamento.
 - **Exportação:** faz streaming em lotes com cursor (`TransactionService.iterate`) e neutraliza
   fórmulas no CSV (`csvValue`). Não carregue o histórico inteiro em memória.
 

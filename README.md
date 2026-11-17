@@ -8,6 +8,8 @@ categoria e origem, defina metas e exporte seus dados.
 - Cadastro, login e sessão renovada automaticamente
 - Lançamentos com categorias globais e pessoais
 - Painel do mês e análise de despesas e receitas
+- Cartões de crédito com faturas calculadas a partir do fechamento e do vencimento, vendo a atual e a próxima
+- Compras parceladas e lançamentos recorrentes, com aviso para renovar
 - Metas de economia e de limite de gasto, com progresso calculado
 - Exportação completa em CSV ou JSON
 
@@ -88,6 +90,10 @@ Tudo fica sob `/api`. Exceto cadastro, login e saúde, as rotas exigem `Authoriz
 | `GET /dashboard/summary`             | Totais do mês                              |
 | `GET /dashboard/by-category`         | Totais por categoria                       |
 | `GET /dashboard/by-origin`           | Totais por conta e cartão                  |
+| `GET, POST /cards`                   | Lista ou cria cartões de crédito           |
+| `GET /cards/overview`                | Fatura atual e próxima de cada cartão      |
+| `GET /cards/:id/invoices/:ano/:mes`  | Fatura pelo mês do vencimento              |
+| `GET /recurrences/ending`            | Recorrências que estão para acabar         |
 | `GET, POST /goals`                   | Lista com progresso ou cria uma meta       |
 | `PUT, DELETE /goals/:id`             | Edita ou exclui uma meta                   |
 | `GET /exports/transactions`          | Exporta tudo em CSV ou JSON                |
