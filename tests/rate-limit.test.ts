@@ -34,22 +34,38 @@ describe("limite de tentativas", () => {
     expect(blocked.headers["retry-after"]).toBeDefined();
   });
 
-  it("limita os pedidos de redefinição por e-mail, sem afetar outros endereços", async () => {
+  describe("pedidos de redefinição de senha", () => {
     const attempt = (email: string) =>
       request(app)
         .post("/api/auth/request-password-reset")
         .set("Origin", "http://localhost:5173")
         .send({ email, redirectTo: "http://localhost:5173/redefinir-senha" });
 
-    expect((await attempt("alvo@finn.test")).status).toBe(200);
-    expect((await attempt("ALVO@finn.test")).status).toBe(200);
-    expect((await attempt("alvo@finn.test")).status).toBe(200);
+    it("exige 1 minuto entre pedidos do mesmo e-mail, sem afetar outros endereços", async () => {
+      expect((await attempt("alvo@finn.test")).status).toBe(200);
 
-    const blocked = await attempt("alvo@finn.test");
-    const other = await attempt("outra@finn.test");
+      const blocked = await attempt("ALVO@finn.test");
+      const other = await attempt("outra@finn.test");
 
-    expect(blocked.status).toBe(429);
-    expect(blocked.body.message).toContain("Muitas tentativas");
-    expect(other.status).toBe(200);
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.message).toContain("1 minuto");
+      expect(blocked.headers["retry-after"]).toBeDefined();
+      expect(other.status).toBe(200);
+    });
+
+    it("limita por hora quem espera o minuto e insiste", async () => {
+      const { passwordResetCooldown } = await import("../src/middlewares/rate-limit.middleware.js");
+
+      for (let sent = 0; sent < 3; sent += 1) {
+        await passwordResetCooldown.resetKey("email:insistente@finn.test");
+        expect((await attempt("insistente@finn.test")).status).toBe(200);
+      }
+
+      await passwordResetCooldown.resetKey("email:insistente@finn.test");
+      const blocked = await attempt("insistente@finn.test");
+
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.message).toContain("Muitas tentativas");
+    });
   });
 });
