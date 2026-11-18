@@ -28,7 +28,8 @@ Senhas continuam em bcrypt (custo 12, no máximo 72 bytes), na tabela `Account` 
   Better Auth guarda o `state` do login num cookie que `Strict` esconderia. A defesa contra CSRF é a
   conferência de `Origin` dos POSTs, que fica sempre ligada (inclusive nos testes).
 - **Limites de tentativas** ficam no Express (`rate-limit.middleware.ts`): login e cadastro por IP, e
-  "esqueci a senha" por e-mail, para ninguém encher a caixa de outra pessoa.
+  "esqueci a senha" por e-mail, com 1 minuto entre pedidos e até 10 por hora, para ninguém encher a
+  caixa de outra pessoa.
 - **`JWT_SECRET`** mantém o nome antigo, mas agora é o segredo do Better Auth. Trocá-lo derruba as
   sessões abertas.
 - **`FRONTEND_ORIGIN`** é o endereço público da tela: os links de e-mail e o retorno do Google são

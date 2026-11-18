@@ -10,6 +10,7 @@ import { bodyLimit } from "./middlewares/body-limit.middleware";
 import { errorHandler, notFoundHandler } from "./middlewares/error-handler.middleware";
 import {
   loginLimiter,
+  passwordResetCooldown,
   passwordResetIpLimiter,
   passwordResetLimiter,
   signupLimiter,
@@ -38,6 +39,7 @@ app.post(
   "/api/auth/request-password-reset",
   readJson,
   passwordResetIpLimiter,
+  passwordResetCooldown,
   passwordResetLimiter,
 );
 app.post("/api/auth/reset-password", readJson, passwordResetIpLimiter);

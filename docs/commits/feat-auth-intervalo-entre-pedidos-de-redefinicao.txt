@@ -1,0 +1,20 @@
+Exigir 1 minuto entre pedidos de redefinição de senha
+
+feat-auth-intervalo-entre-pedidos-de-redefinicao
+
+Resumo
+Cada pedido de "esqueci a senha" dispara um e-mail. Agora o mesmo endereço só pode pedir um novo link depois de 1 minuto; antes, o limite era só de 10 por hora.
+
+Arquivos alterados
+- src/middlewares/rate-limit.middleware.ts: passwordResetCooldown (1 pedido por minuto, por e-mail) e chave de limite compartilhada com o teto por hora.
+- src/app.ts: o intervalo roda antes do teto por hora, para um pedido barrado não gastar a cota da hora.
+- tests/rate-limit.test.ts: cobre o intervalo, a independência entre e-mails e o teto por hora.
+- frontend/src/pages/AuthPage.test.tsx: a tela mostra o aviso em português.
+- docs/AUTENTICACAO.md.
+
+Regras preservadas
+- A resposta continua igual para e-mail cadastrado e desconhecido, e o intervalo vale para os dois.
+
+Validação executada
+- format:check, lint e check sem erros; tests/rate-limit e tests/auth da API passaram (24 testes); AuthPage do frontend passou (8 testes).
+- A suíte completa não foi rodada de novo nesta mudança.

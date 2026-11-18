@@ -86,6 +86,19 @@ describe("esqueci a senha", () => {
     expect(await screen.findByRole("status")).toHaveTextContent("Se existir uma conta");
   });
 
+  it("mostra o aviso quando o pedido vem antes de 1 minuto", async () => {
+    vi.mocked(api.post).mockRejectedValue(
+      apiError(429, { message: "Aguarde 1 minuto antes de pedir outro link." }),
+    );
+    render(<AuthPage onAuthenticated={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Esqueci minha senha" }));
+    await userEvent.type(screen.getByLabelText("E-mail"), "alguem@finn.test");
+    await userEvent.click(screen.getByRole("button", { name: "Enviar link" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Aguarde 1 minuto");
+  });
+
   it("troca a senha com o token do link e volta ao login avisando", async () => {
     render(<AuthPage resetToken="token-do-email" onAuthenticated={vi.fn()} />);
 
