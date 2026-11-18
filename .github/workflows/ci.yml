@@ -40,7 +40,9 @@ jobs:
       - run: npm run check
       - run: npm run build
       - run: npm test
-      - run: npm audit --omit=dev --audit-level=high
+      # --omit=optional: o Better Auth declara o vitest como peer opcional, e sem isso o npm
+      # trataria o vitest (só de desenvolvimento) como dependência de produção.
+      - run: npm audit --omit=dev --omit=optional --audit-level=high
 
   frontend:
     runs-on: ubuntu-latest

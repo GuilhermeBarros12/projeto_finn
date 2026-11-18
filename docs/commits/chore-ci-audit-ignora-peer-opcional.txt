@@ -1,0 +1,15 @@
+Ajustar o npm audit do CI da API para ignorar dependências opcionais
+chore-ci-audit-ignora-peer-opcional
+
+Resumo
+O Better Auth declara o vitest como peer opcional, e o npm passou a tratar o vitest (só de desenvolvimento) como dependência de produção. O aviso de picomatch, sem correção publicada, derrubava o npm audit da API. O audit passa a usar --omit=optional.
+
+Arquivos alterados
+- .github/workflows/ci.yml: npm audit --omit=dev --omit=optional --audit-level=high no job da API, com comentário do motivo.
+
+Regras preservadas
+- O audit continua cobrindo todas as dependências de produção; só deixa de contar peers opcionais.
+
+Validação executada
+- npm audit --omit=dev --omit=optional --audit-level=high na raiz: 0 vulnerabilidades.
+- O audit do frontend continua falhando por picomatch via @tailwindcss/vite, como antes desta mudança; não foi alterado.
