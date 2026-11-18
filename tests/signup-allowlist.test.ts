@@ -16,12 +16,15 @@ beforeEach(async () => {
 });
 
 const signup = (email: string) =>
-  request(app).post("/api/users").send({ name: "Pessoa", email, password: "senha-segura-123" });
+  request(app)
+    .post("/api/auth/sign-up/email")
+    .set("Origin", "http://localhost:5173")
+    .send({ name: "Pessoa", email, password: "senha-segura-123" });
 
 describe("cadastro restrito por e-mail", () => {
   it("aceita os e-mails da lista, sem diferenciar maiúsculas", async () => {
-    expect((await signup("dono@finn.test")).status).toBe(201);
-    expect((await signup("OUTRA@finn.test")).status).toBe(201);
+    expect((await signup("dono@finn.test")).status).toBe(200);
+    expect((await signup("OUTRA@finn.test")).status).toBe(200);
   });
 
   it("recusa qualquer outro e-mail com 403", async () => {

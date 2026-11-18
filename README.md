@@ -76,29 +76,33 @@ docs/       Guia de deploy e histórico de alterações
 
 ## Principais rotas
 
-Tudo fica sob `/api`. Exceto cadastro, login e saúde, as rotas exigem `Authorization: Bearer`.
+Tudo fica sob `/api`. Exceto login, cadastro, saúde e configuração, as rotas exigem a sessão
+(cookie da tela ou `Authorization: Bearer` com o token da sessão).
 
-| Método e rota                        | Descrição                                  |
-| ------------------------------------ | ------------------------------------------ |
-| `POST /users`                        | Cria uma conta                             |
-| `POST /auth/login`                   | Entra e define o cookie de sessão          |
-| `POST /auth/refresh`, `/auth/logout` | Renova ou encerra a sessão                 |
-| `GET, POST /categories`              | Lista ou cria categorias                   |
-| `PATCH /categories/:id/deactivate`   | Desativa uma categoria pessoal             |
-| `GET, POST /transactions`            | Lista com filtros ou cria um lançamento    |
-| `PUT, DELETE /transactions/:id`      | Edita ou exclui um lançamento              |
-| `GET /dashboard/summary`             | Totais do mês                              |
-| `GET /dashboard/by-category`         | Totais por categoria                       |
-| `GET /dashboard/by-origin`           | Totais por conta e cartão                  |
-| `GET, POST /cards`                   | Lista ou cria cartões de crédito           |
-| `GET /cards/overview`                | Fatura atual e próxima de cada cartão      |
-| `GET /cards/:id/invoices/:ano/:mes`  | Fatura pelo mês do vencimento              |
-| `GET /recurrences/ending`            | Recorrências que estão para acabar         |
-| `GET, POST /goals`                   | Lista com progresso ou cria uma meta       |
-| `PUT, DELETE /goals/:id`             | Edita ou exclui uma meta                   |
-| `GET /exports/transactions`          | Exporta tudo em CSV ou JSON                |
-| `POST /agent/chat`                   | Pergunta ao assistente, que só lê os dados |
-| `GET /health`                        | Verifica a API e o banco                   |
+| Método e rota                       | Descrição                                  |
+| ----------------------------------- | ------------------------------------------ |
+| `POST /auth/sign-up/email`          | Cria a conta e já abre a sessão            |
+| `POST /auth/sign-in/email`          | Entra e define o cookie de sessão          |
+| `POST /auth/sign-out`               | Encerra a sessão                           |
+| `POST /auth/request-password-reset` | Envia o link de "esqueci a senha"          |
+| `POST /auth/reset-password`         | Troca a senha com o token do link          |
+| `POST /auth/sign-in/social`         | Começa o login com o Google                |
+| `GET, POST /categories`             | Lista ou cria categorias                   |
+| `PATCH /categories/:id/deactivate`  | Desativa uma categoria pessoal             |
+| `GET, POST /transactions`           | Lista com filtros ou cria um lançamento    |
+| `PUT, DELETE /transactions/:id`     | Edita ou exclui um lançamento              |
+| `GET /dashboard/summary`            | Totais do mês                              |
+| `GET /dashboard/by-category`        | Totais por categoria                       |
+| `GET /dashboard/by-origin`          | Totais por conta e cartão                  |
+| `GET, POST /cards`                  | Lista ou cria cartões de crédito           |
+| `GET /cards/overview`               | Fatura atual e próxima de cada cartão      |
+| `GET /cards/:id/invoices/:ano/:mes` | Fatura pelo mês do vencimento              |
+| `GET /recurrences/ending`           | Recorrências que estão para acabar         |
+| `GET, POST /goals`                  | Lista com progresso ou cria uma meta       |
+| `PUT, DELETE /goals/:id`            | Edita ou exclui uma meta                   |
+| `GET /exports/transactions`         | Exporta tudo em CSV ou JSON                |
+| `POST /agent/chat`                  | Pergunta ao assistente, que só lê os dados |
+| `GET /health`                       | Verifica a API e o banco                   |
 
 ## Deploy
 

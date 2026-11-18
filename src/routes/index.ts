@@ -1,21 +1,19 @@
 import { Router } from "express";
 import { agentRoutes } from "./agent.routes";
-import { authRoutes } from "./auth.routes";
 import { cardsRoutes } from "./cards.routes";
 import { categoriesRoutes } from "./categories.routes";
+import { configRoutes } from "./config.routes";
 import { dashboardRoutes } from "./dashboard.routes";
 import { exportsRoutes } from "./exports.routes";
 import { healthRoutes } from "./health.routes";
 import { goalsRoutes } from "./goals.routes";
 import { recurrencesRoutes } from "./recurrences.routes";
 import { transactionsRoutes } from "./transactions.routes";
-import { usersRoutes } from "./users.routes";
 
 export const routes = Router();
 
 routes.use(healthRoutes);
-routes.use("/users", usersRoutes);
-routes.use("/auth", authRoutes);
+routes.use(configRoutes);
 routes.use("/cards", cardsRoutes);
 routes.use("/categories", categoriesRoutes);
 routes.use("/transactions", transactionsRoutes);

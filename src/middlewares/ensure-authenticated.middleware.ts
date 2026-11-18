@@ -1,30 +1,21 @@
+import { fromNodeHeaders } from "better-auth/node";
 import type { NextFunction, Request, Response } from "express";
 import { AppError } from "../lib/app-error";
-import { verifyAccessToken } from "../lib/jwt";
+import { auth } from "../lib/auth";
 
-export const ensureAuthenticated = (
+/** Aceita o cookie de sessão da tela e, para o aplicativo, o mesmo token em Authorization. */
+export const ensureAuthenticated = async (
   request: Request,
   _response: Response,
   next: NextFunction,
-): void => {
-  const [scheme, token] = request.headers.authorization?.split(" ") ?? [];
+): Promise<void> => {
+  const session = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
 
-  if (scheme?.toLowerCase() !== "bearer" || !token) {
-    next(new AppError("Token de autenticação ausente ou inválido.", 401));
+  if (!session) {
+    next(new AppError("Sessão inválida ou expirada.", 401));
     return;
   }
 
-  try {
-    const userId = verifyAccessToken(token);
-
-    if (!userId) {
-      next(new AppError("Token de autenticação inválido.", 401));
-      return;
-    }
-
-    request.userId = userId;
-    next();
-  } catch {
-    next(new AppError("Token de autenticação inválido ou expirado.", 401));
-  }
+  request.userId = session.user.id;
+  next();
 };

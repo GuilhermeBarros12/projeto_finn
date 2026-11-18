@@ -6,23 +6,41 @@ export interface TestUser {
   id: string;
   email: string;
   password: string;
+  /** Token de sessão para Authorization: Bearer, o caminho do aplicativo. */
   token: string;
+  /** Cookie de sessão, o caminho da tela. */
   cookie: string;
 }
+
+// Igual ao FRONTEND_ORIGIN de tests/setup.ts: o Better Auth confere a origem dos POSTs.
+export const ORIGIN = "http://localhost:5173";
 
 let sequence = 0;
 
 export const resetDatabase = async (): Promise<void> => {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "RefreshToken", "Transaction", "Recurrence", "Card", "Goal", "Category", "User" CASCADE',
+    'TRUNCATE TABLE "Session", "Account", "Verification", "Transaction", "Recurrence", "Card", "Goal", "Category", "User" CASCADE',
   );
 };
 
-export const refreshCookieFrom = (response: request.Response): string => {
+/** POST nas rotas do Better Auth, já com a origem da tela. */
+export const authPost = (path: string, body: object = {}) =>
+  request(app).post(`/api/auth${path}`).set("Origin", ORIGIN).send(body);
+
+export const sessionCookieFrom = (response: request.Response): string => {
   const cookies = response.headers["set-cookie"] as unknown as string[] | undefined;
-  const cookie = cookies?.find((value) => value.startsWith("finn_refresh="));
+  const cookie = cookies?.find((value) => value.startsWith("finn.session_token="));
   if (!cookie) throw new Error("Resposta sem cookie de sessão.");
   return cookie.split(";")[0] as string;
+};
+
+export const signIn = async (email: string, password: string) => {
+  const response = await authPost("/sign-in/email", { email, password });
+  return {
+    response,
+    token: response.headers["set-auth-token"] as string,
+    cookie: response.status === 200 ? sessionCookieFrom(response) : "",
+  };
 };
 
 export const createUser = async (): Promise<TestUser> => {
@@ -30,15 +48,15 @@ export const createUser = async (): Promise<TestUser> => {
   const email = `pessoa${sequence}@finn.test`;
   const password = "senha-segura-123";
 
-  const created = await request(app).post("/api/users").send({ name: "Pessoa", email, password });
-  const login = await request(app).post("/api/auth/login").send({ email, password });
+  // O cadastro já abre a sessão.
+  const created = await authPost("/sign-up/email", { name: "Pessoa", email, password });
 
   return {
     id: created.body.user.id,
     email,
     password,
-    token: login.body.token,
-    cookie: refreshCookieFrom(login),
+    token: created.headers["set-auth-token"] as string,
+    cookie: sessionCookieFrom(created),
   };
 };
 

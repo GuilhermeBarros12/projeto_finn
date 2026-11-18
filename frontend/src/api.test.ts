@@ -1,6 +1,6 @@
-import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
+import { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { api, clearSession, setAccessToken, setSessionExpiredHandler } from "./api";
+import { api, fetchSession, setSessionExpiredHandler } from "./api";
 
 const unauthorized = (config: InternalAxiosRequestConfig) =>
   new AxiosError("401", "ERR", config, undefined, {
@@ -11,20 +11,16 @@ const unauthorized = (config: InternalAxiosRequestConfig) =>
     config,
   });
 
-const respond = (config: InternalAxiosRequestConfig) => ({
-  data: { authorization: config.headers.get("Authorization") },
+const ok = (config: InternalAxiosRequestConfig, data: unknown) => ({
+  data,
   status: 200,
   statusText: "OK",
   headers: new AxiosHeaders(),
   config,
 });
 
-const refreshPost = vi.spyOn(axios, "post");
-
 beforeEach(() => {
-  clearSession();
   setSessionExpiredHandler(() => undefined);
-  refreshPost.mockReset();
 });
 
 afterEach(() => {
@@ -32,38 +28,9 @@ afterEach(() => {
 });
 
 describe("sessão no cliente HTTP", () => {
-  it("renova uma vez e repete a requisição com o token novo", async () => {
-    setAccessToken("expirado");
-    refreshPost.mockResolvedValue({ data: { token: "novo" } });
-    api.defaults.adapter = async (config) => {
-      if (config.headers.get("Authorization") === "Bearer expirado") throw unauthorized(config);
-      return respond(config);
-    };
-
-    const response = await api.get("/transactions");
-
-    expect(refreshPost).toHaveBeenCalledTimes(1);
-    expect(response.data.authorization).toBe("Bearer novo");
-  });
-
-  it("compartilha uma renovação entre requisições simultâneas", async () => {
-    setAccessToken("expirado");
-    refreshPost.mockResolvedValue({ data: { token: "novo" } });
-    api.defaults.adapter = async (config) => {
-      if (config.headers.get("Authorization") === "Bearer expirado") throw unauthorized(config);
-      return respond(config);
-    };
-
-    await Promise.all([api.get("/a"), api.get("/b"), api.get("/c")]);
-
-    expect(refreshPost).toHaveBeenCalledTimes(1);
-  });
-
-  it("avisa que a sessão expirou quando a renovação falha", async () => {
+  it("avisa que a sessão expirou quando uma rota protegida responde 401", async () => {
     const expired = vi.fn();
     setSessionExpiredHandler(expired);
-    setAccessToken("expirado");
-    refreshPost.mockRejectedValue(new Error("sem sessão"));
     api.defaults.adapter = async (config) => {
       throw unauthorized(config);
     };
@@ -73,13 +40,23 @@ describe("sessão no cliente HTTP", () => {
     expect(expired).toHaveBeenCalledTimes(1);
   });
 
-  it("não encerra a sessão quando a renovação falha por erro temporário", async () => {
+  it("não trata como sessão vencida o 401 do próprio login", async () => {
     const expired = vi.fn();
     setSessionExpiredHandler(expired);
-    setAccessToken("expirado");
-    refreshPost.mockRejectedValue(new AxiosError("sem rede"));
     api.defaults.adapter = async (config) => {
       throw unauthorized(config);
+    };
+
+    await expect(api.post("/auth/sign-in/email", {})).rejects.toThrow();
+
+    expect(expired).not.toHaveBeenCalled();
+  });
+
+  it("não encerra a sessão por erro de servidor ou de rede", async () => {
+    const expired = vi.fn();
+    setSessionExpiredHandler(expired);
+    api.defaults.adapter = async () => {
+      throw new AxiosError("sem rede");
     };
 
     await expect(api.get("/transactions")).rejects.toThrow();
@@ -87,28 +64,11 @@ describe("sessão no cliente HTTP", () => {
     expect(expired).not.toHaveBeenCalled();
   });
 
-  it("não tenta renovar quando o próprio login falha", async () => {
-    api.defaults.adapter = async (config) => {
-      throw unauthorized(config);
-    };
+  it("reconhece a sessão ativa e a ausência de sessão", async () => {
+    api.defaults.adapter = async (config) => ok(config, { user: { id: "u1" }, session: {} });
+    expect(await fetchSession()).toBe(true);
 
-    await expect(api.post("/auth/login", {})).rejects.toThrow();
-
-    expect(refreshPost).not.toHaveBeenCalled();
-  });
-
-  it("não entra em laço se a repetição também der 401", async () => {
-    const expired = vi.fn();
-    setSessionExpiredHandler(expired);
-    let calls = 0;
-    refreshPost.mockResolvedValue({ data: { token: "novo" } });
-    api.defaults.adapter = async (config) => {
-      calls += 1;
-      throw unauthorized(config);
-    };
-
-    await expect(api.get("/transactions")).rejects.toThrow();
-
-    expect(calls).toBe(2);
+    api.defaults.adapter = async (config) => ok(config, null);
+    expect(await fetchSession()).toBe(false);
   });
 });
