@@ -1,73 +1,27 @@
-import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
+import axios, { type AxiosError } from "axios";
 
-// Em produção a tela e a API ficam na mesma origem (nginx ou repasse da Vercel), como o cookie exige.
-const baseURL =
-  import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "/api" : "http://localhost:3333/api");
+// A tela e a API ficam na mesma origem (proxy do Vite, nginx ou repasse da Vercel): o cookie de
+// sessão é SameSite e HttpOnly, então nenhum script da página consegue ler a sessão.
+const baseURL = import.meta.env.VITE_API_URL ?? "/api";
 
 export const api = axios.create({ baseURL, withCredentials: true });
 
-interface RetriableRequest extends InternalAxiosRequestConfig {
-  retried?: boolean;
-}
-
-// Fica em memória de propósito: um script injetado não encontra o token no navegador.
-let accessToken: string | null = null;
-let refreshing: Promise<string> | null = null;
 let onSessionExpired: () => void = () => undefined;
-
-export const setAccessToken = (token: string): void => {
-  accessToken = token;
-};
-
-export const clearSession = (): void => {
-  accessToken = null;
-};
 
 export const setSessionExpiredHandler = (handler: () => void): void => {
   onSessionExpired = handler;
 };
 
-/** Várias requisições podem expirar juntas; todas aguardam a mesma renovação. */
-export const refreshSession = (): Promise<string> => {
-  refreshing ??= axios
-    .post<{ token: string }>(`${baseURL}/auth/refresh`, null, { withCredentials: true })
-    .then((response) => {
-      accessToken = response.data.token;
-      return response.data.token;
-    })
-    .finally(() => {
-      refreshing = null;
-    });
-
-  return refreshing;
+/** Quem abre a página já pode ter uma sessão: o cookie diz, e o servidor confirma. */
+export const fetchSession = async (): Promise<boolean> => {
+  const response = await api.get<{ user: { id: string } } | null>("/auth/get-session");
+  return Boolean(response.data?.user);
 };
 
-api.interceptors.request.use((config) => {
-  if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
-  return config;
-});
+api.interceptors.response.use(undefined, (error: AxiosError) => {
+  // Falhas das próprias rotas de login são erro de formulário, não sessão vencida.
+  const isAuthRoute = error.config?.url?.startsWith("/auth/") ?? false;
 
-api.interceptors.response.use(undefined, async (error: AxiosError) => {
-  const request = error.config as RetriableRequest | undefined;
-  const isAuthRoute = request?.url?.startsWith("/auth/") ?? false;
-
-  if (error.response?.status !== 401 || !request || request.retried || isAuthRoute) {
-    throw error;
-  }
-
-  request.retried = true;
-
-  try {
-    await refreshSession();
-  } catch (refreshError) {
-    // Rede fora ou servidor com problema não encerram a sessão: o cookie segue válido.
-    const isTemporary = axios.isAxiosError(refreshError) && refreshError.response?.status !== 401;
-    if (!isTemporary) {
-      clearSession();
-      onSessionExpired();
-    }
-    throw error;
-  }
-
-  return api(request);
+  if (error.response?.status === 401 && !isAuthRoute) onSessionExpired();
+  throw error;
 });

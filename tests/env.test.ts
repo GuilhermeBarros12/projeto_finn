@@ -7,15 +7,16 @@ const base = {
 };
 
 describe("validação das variáveis na subida (CONFIG-01)", () => {
-  it.each(["abc", "900", "3600", "10s", "", "-5m"])(
-    "recusa ACCESS_TOKEN_EXPIRES_IN=%j",
-    (value) => {
-      expect(envSchema.safeParse({ ...base, ACCESS_TOKEN_EXPIRES_IN: value }).success).toBe(false);
-    },
-  );
+  it.each(["0", "-5", "abc", "1.5"])("recusa SESSION_DAYS=%j", (value) => {
+    expect(envSchema.safeParse({ ...base, SESSION_DAYS: value }).success).toBe(false);
+  });
 
-  it.each(["15m", "1h", "2 hours", "1d"])("aceita ACCESS_TOKEN_EXPIRES_IN=%j", (value) => {
-    expect(envSchema.safeParse({ ...base, ACCESS_TOKEN_EXPIRES_IN: value }).success).toBe(true);
+  it("usa 30 dias de sessão por padrão e as credenciais do Google são opcionais", () => {
+    const result = envSchema.parse(base);
+
+    expect(result.SESSION_DAYS).toBe(30);
+    expect(result.GOOGLE_CLIENT_ID).toBeUndefined();
+    expect(result.RESEND_API_KEY).toBeUndefined();
   });
 
   it("recusa fuso inexistente e aceita um fuso IANA", () => {

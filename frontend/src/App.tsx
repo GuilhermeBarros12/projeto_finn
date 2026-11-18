@@ -1,8 +1,9 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import { api, clearSession, refreshSession, setSessionExpiredHandler } from "./api";
+import { api, fetchSession, setSessionExpiredHandler } from "./api";
 import { AppSidebar } from "./components/AppSidebar";
 import { CategoryModal } from "./components/CategoryModal";
+import { redirectErrorMessage } from "./lib/auth-errors";
 import { AuthPage } from "./pages/AuthPage";
 import type { Card, Category } from "./types";
 
@@ -16,6 +17,26 @@ const GoalsPage = lazy(() => import("./pages/GoalsPage"));
 const AssistantPage = lazy(() => import("./pages/AssistantPage"));
 
 type SessionStatus = "loading" | "anonymous" | "authenticated";
+
+/**
+ * Quem chega pelo link do e-mail (/redefinir-senha?token=...) ou volta do Google com erro
+ * (/?error=...) traz isso na URL. Lê uma vez e limpa o endereço.
+ */
+const readAuthRedirect = () => {
+  const { pathname, search } = window.location;
+  const params = new URLSearchParams(search);
+  const token = pathname === "/redefinir-senha" ? params.get("token") : null;
+  const error = params.get("error");
+
+  if (token || error || pathname === "/redefinir-senha") {
+    window.history.replaceState(null, "", "/");
+  }
+
+  return {
+    resetToken: token,
+    error: error ? redirectErrorMessage(error) : "",
+  };
+};
 
 function PageFallback() {
   return (
@@ -162,6 +183,7 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
 }
 
 export function App() {
+  const [redirect] = useState(readAuthRedirect);
   const [status, setStatus] = useState<SessionStatus>("loading");
   const [notice, setNotice] = useState("");
   const [signOutError, setSignOutError] = useState("");
@@ -172,9 +194,9 @@ export function App() {
       setStatus("anonymous");
     });
 
-    // O token de acesso só existe em memória: ao recarregar, o cookie restaura a sessão.
-    refreshSession()
-      .then(() => setStatus("authenticated"))
+    // Ao recarregar, o cookie de sessão diz se a pessoa continua logada.
+    fetchSession()
+      .then((active) => setStatus(active ? "authenticated" : "anonymous"))
       .catch(() => setStatus("anonymous"));
   }, []);
 
@@ -182,14 +204,13 @@ export function App() {
     setSignOutError("");
 
     try {
-      await api.post("/auth/logout");
+      await api.post("/auth/sign-out");
     } catch {
       // Sem a confirmação, o cookie continua válido: dizer que saiu seria falso.
       setSignOutError("Não foi possível sair. Confira sua conexão e tente novamente.");
       return;
     }
 
-    clearSession();
     setNotice("");
     setStatus("anonymous");
   };
@@ -202,6 +223,8 @@ export function App() {
     return (
       <AuthPage
         notice={notice}
+        initialError={redirect.error}
+        resetToken={redirect.resetToken}
         onAuthenticated={() => {
           setNotice("");
           setStatus("authenticated");

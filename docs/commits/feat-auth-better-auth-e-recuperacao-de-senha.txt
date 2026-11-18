@@ -1,0 +1,50 @@
+Migrar o login para o Better Auth e adicionar "esqueci a senha" e login com Google
+feat-auth-better-auth-e-recuperacao-de-senha
+
+Resumo
+Troca o JWT de acesso e o refresh token feitos à mão pelo Better Auth, dentro da própria API e no mesmo banco. A sessão passa a ser um cookie HttpOnly de 30 dias, e o mesmo token vale em Authorization: Bearer para o aplicativo futuro. Entram o fluxo de esqueci a senha por e-mail (link de 1 hora, uso único, derruba as sessões) e o login com Google, que só aparece quando as credenciais existem. O cadastro fica aberto, sujeito à lista SIGNUP_ALLOWED_EMAILS quando ela estiver preenchida.
+
+Dependências adicionadas
+- better-auth: login, sessão, redefinição de senha e Google.
+
+Dependências removidas
+- jsonwebtoken, cookie-parser e os tipos deles.
+
+Arquivos criados
+- src/lib/auth.ts: configuração do Better Auth (bcrypt mantido, origem conferida, vínculo automático desligado, lista de e-mails permitidos).
+- src/lib/mailer.ts: envio pelo Resend, com e-mail simulado no log fora da produção.
+- src/middlewares/body-limit.middleware.ts: limite de 100 kb nas rotas do Better Auth, que leem o corpo por conta própria.
+- src/routes/config.routes.ts: GET /api/config, que diz à tela se o botão do Google deve aparecer.
+- prisma/migrations/20261118120000_better_auth: tabelas Session, Account e Verification; copia as senhas bcrypt dos usuários existentes para Account; remove User.password e RefreshToken.
+- docs/AUTENTICACAO.md: como funciona, decisões, e-mail e Google.
+- frontend/src/lib/auth-errors.ts: mensagens do Better Auth em português.
+- tests/logger.test.ts, frontend/src/pages/AuthPage.test.tsx.
+
+Arquivos alterados
+- src/app.ts: monta o Better Auth em /api/auth antes do express.json; limites de login, cadastro e redefinição.
+- src/middlewares/ensure-authenticated.middleware.ts: valida a sessão pelo Better Auth (cookie ou Bearer).
+- src/middlewares/rate-limit.middleware.ts: limite de redefinição por e-mail e teto geral.
+- src/lib/logger.ts: esconde set-auth-token, location, code, state e o token do link de redefinição.
+- src/config/env.ts: SESSION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, RESEND_API_KEY, EMAIL_FROM; saem ACCESS_TOKEN_EXPIRES_IN e REFRESH_TOKEN_DAYS (avisadas como ignoradas).
+- prisma/schema.prisma: User sem senha, com emailVerified e image; modelos novos.
+- frontend: api.ts sem token em memória nem renovação; App.tsx lê a sessão no servidor e trata o link do e-mail; AuthPage.tsx com esqueci, redefinir e Google; vite.config.ts repassa /api para a API em desenvolvimento.
+- tests: helpers, auth, rate-limit, http, env e signup-allowlist reescritos para o novo fluxo.
+- .env.example, .env.production.example, docker-compose.yml, README.md, CLAUDE.md, docs/DEPLOY-NUVEM.md, frontend/nginx.conf.
+
+Arquivos removidos
+- src/services/auth.service.ts, src/controllers/auth.controller.ts, src/routes/auth.routes.ts, src/lib/jwt.ts, src/lib/refresh-cookie.ts, src/schemas/auth.schema.ts, src/services/user.service.ts, src/controllers/user.controller.ts, src/routes/users.routes.ts.
+
+Regras preservadas
+- Todo acesso a dados continua filtrando por userId, agora vindo da sessão.
+- Senhas seguem em bcrypt (custo 12, até 72 bytes); quem já tinha conta entra com a mesma senha.
+- A resposta de esqueci a senha é a mesma para e-mail cadastrado e desconhecido.
+- A conferência de Origin dos POSTs fica sempre ligada, inclusive nos testes.
+
+Validação executada
+- format:check, lint, check e build da API: sem erros.
+- npm test (API, banco finn_test): 20 arquivos, 218 testes passaram.
+- npm test --prefix frontend: 16 arquivos, 86 testes passaram; build do frontend concluído.
+- Migration aplicada no banco local com 3 usuários: as 3 senhas viraram contas "credential" e não houve diferença entre o banco e o schema.
+- Navegador, em desenvolvimento: cadastro, recarregar a página, sair, esqueci a senha, link do e-mail, senha nova (a antiga passou a dar 401) e login. O cookie não aparece para o JavaScript.
+- Não verificado: envio real de e-mail (Resend), login com Google com credenciais reais, o repasse da Vercel com o cookie e o ambiente de produção.
+- npm audit: o aviso de picomatch (sem correção publicada) aparece também no frontend e passa a aparecer na API porque o Better Auth declara o vitest como peer opcional; o CI da API precisa de --omit=optional.

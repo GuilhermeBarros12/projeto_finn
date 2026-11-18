@@ -15,8 +15,9 @@ Este caminho dispensa manter um servidor. Cada parte roda num serviço gerenciad
 
 O navegador só fala com a Vercel. Ela entrega a tela e repassa tudo o que começa com `/api` para o
 Cloud Run. Para o navegador, tela e API ficam no mesmo endereço, e é isso que mantém o cookie de
-sessão funcionando: ele é `SameSite=Strict` e não seria enviado de `vercel.app` para `run.app`, que
-são sites diferentes.
+sessão funcionando: ele pertence ao endereço da tela e não seria enviado de `vercel.app` para
+`run.app`, que são sites diferentes. Pelo mesmo motivo, `FRONTEND_ORIGIN` precisa ser o endereço da
+Vercel: os links de e-mail e o retorno do Google são montados a partir dele.
 
 ```text
 celular ─► seu-app.vercel.app ─┬─► arquivos da tela

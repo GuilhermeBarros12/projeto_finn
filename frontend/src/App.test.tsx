@@ -1,20 +1,17 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { api, clearSession } from "./api";
+import { api } from "./api";
 import { App } from "./App";
 
 vi.mock("./api", () => ({
   api: { get: vi.fn(), post: vi.fn() },
-  clearSession: vi.fn(),
-  refreshSession: vi.fn().mockResolvedValue("token"),
-  setAccessToken: vi.fn(),
+  fetchSession: vi.fn().mockResolvedValue(true),
   setSessionExpiredHandler: vi.fn(),
 }));
 
 beforeEach(() => {
   vi.mocked(api.post).mockReset();
-  vi.mocked(clearSession).mockReset();
   vi.mocked(api.get).mockResolvedValue({
     data: { categories: [], data: [], totalIncome: 0, totalExpense: 0, netBalance: 0 },
   });
@@ -31,7 +28,7 @@ describe("saída da conta", () => {
     await clickSignOut();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível sair");
-    expect(clearSession).not.toHaveBeenCalled();
+    expect(api.post).toHaveBeenCalledWith("/auth/sign-out");
     expect(screen.getByRole("button", { name: "Sair" })).toBeInTheDocument();
   });
 
@@ -45,7 +42,7 @@ describe("saída da conta", () => {
     await clickSignOut();
 
     expect(await screen.findByRole("button", { name: "Entrar" })).toBeInTheDocument();
-    expect(clearSession).toHaveBeenCalledTimes(1);
+    expect(api.post).toHaveBeenCalledTimes(2);
   });
 });
 

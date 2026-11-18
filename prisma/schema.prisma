@@ -41,30 +41,65 @@ model User {
   id            String         @id @default(uuid(7))
   name          String
   email         String         @unique
-  password      String
+  emailVerified Boolean        @default(false)
+  image         String?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   preference    Json?
   categories    Category[]
   transactions  Transaction[]
   goals         Goal[]
-  refreshTokens RefreshToken[]
+  sessions      Session[]
+  accounts      Account[]
   cards         Card[]
   recurrences   Recurrence[]
 }
 
-model RefreshToken {
-  id        String    @id @default(uuid(7))
+/// Tabelas abaixo pertencem ao Better Auth: o formato é o que a biblioteca espera.
+model Session {
+  id        String   @id @default(uuid(7))
   userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  familyId  String
-  tokenHash String    @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
   expiresAt DateTime
-  rotatedAt DateTime?
-  createdAt DateTime  @default(now())
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([userId])
-  @@index([familyId])
+}
+
+/// Uma conta por forma de entrada: "credential" guarda a senha; "google" guarda o vínculo.
+model Account {
+  id                    String    @id @default(uuid(7))
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId             String
+  providerId            String
+  password              String?
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+/// Links de redefinição de senha e outras verificações de uso único.
+model Verification {
+  id         String   @id @default(uuid(7))
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
 }
 
 model Category {

@@ -1,274 +1,285 @@
-import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { app } from "../src/app";
+import { sentEmails } from "../src/lib/mailer";
 import { prisma } from "../src/lib/prisma";
-import { api, createUser, refreshCookieFrom, resetDatabase } from "./helpers";
+import { api, authPost, createUser, resetDatabase, signIn } from "./helpers";
 
-beforeEach(resetDatabase);
+beforeEach(async () => {
+  sentEmails.length = 0;
+  await resetDatabase();
+});
 
-describe("cadastro e login", () => {
-  it("guarda a senha como hash e nunca a devolve", async () => {
-    const response = await request(app)
-      .post("/api/users")
-      .send({ name: "Ana", email: "ANA@finn.test", password: "senha-segura-123" });
+describe("cadastro", () => {
+  it("guarda a senha como hash bcrypt e nunca a devolve", async () => {
+    const response = await authPost("/sign-up/email", {
+      name: "Ana",
+      email: "ANA@finn.test",
+      password: "senha-segura-123",
+    });
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     expect(response.body.user.email).toBe("ana@finn.test");
-    expect(response.body.user).not.toHaveProperty("password");
+    expect(JSON.stringify(response.body)).not.toContain("senha-segura-123");
 
-    const stored = await prisma.user.findUniqueOrThrow({ where: { email: "ana@finn.test" } });
-    expect(stored.password).not.toContain("senha-segura-123");
+    const account = await prisma.account.findFirstOrThrow({
+      where: { providerId: "credential", user: { email: "ana@finn.test" } },
+    });
+    expect(account.password).not.toContain("senha-segura-123");
+    expect(await bcrypt.compare("senha-segura-123", account.password as string)).toBe(true);
   });
 
-  it("rejeita senha curta com mensagem que o usuário entende", async () => {
-    const response = await request(app)
-      .post("/api/users")
-      .send({ name: "Ana", email: "ana@finn.test", password: "123" });
+  it("recusa senha curta", async () => {
+    const response = await authPost("/sign-up/email", {
+      name: "Ana",
+      email: "ana@finn.test",
+      password: "123",
+    });
 
     expect(response.status).toBe(400);
-    expect(response.body.issues[0].message).toContain("8 caracteres");
+    expect(await prisma.user.count()).toBe(0);
   });
 
-  it("rejeita senha que o bcrypt cortaria silenciosamente", async () => {
-    const response = await request(app)
-      .post("/api/users")
-      .send({ name: "Ana", email: "ana@finn.test", password: "é".repeat(40) });
+  it("recusa senha que o bcrypt cortaria silenciosamente", async () => {
+    const response = await authPost("/sign-up/email", {
+      name: "Ana",
+      email: "ana@finn.test",
+      password: "é".repeat(40),
+    });
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(await prisma.user.count()).toBe(0);
+  });
+
+  it("recusa e-mail repetido", async () => {
+    const user = await createUser();
+    const response = await authPost("/sign-up/email", {
+      name: "Outra",
+      email: user.email.toUpperCase(),
+      password: "outra-senha-123",
+    });
+
+    expect(response.status).toBe(422);
+    expect(await prisma.user.count()).toBe(1);
+  });
+});
+
+describe("login", () => {
+  it("entrega a sessão só em cookie HttpOnly", async () => {
+    const user = await createUser();
+    const { response } = await signIn(user.email, user.password);
+    const header = (response.headers["set-cookie"] as unknown as string[]).join(";");
+
+    expect(response.status).toBe(200);
+    expect(header).toContain("HttpOnly");
+    expect(header).toContain("SameSite=Lax");
+    expect(header).toContain("Path=/");
+    expect(response.body.user.email).toBe(user.email);
   });
 
   it("responde igual para senha errada e e-mail inexistente", async () => {
     const user = await createUser();
-    const wrongPassword = await request(app)
-      .post("/api/auth/login")
-      .send({ email: user.email, password: "senha-errada" });
-    const unknownEmail = await request(app)
-      .post("/api/auth/login")
-      .send({ email: "ninguem@finn.test", password: "senha-errada" });
+    const wrongPassword = await signIn(user.email, "senha-errada");
+    const unknownEmail = await signIn("ninguem@finn.test", "senha-errada");
 
-    expect(wrongPassword.status).toBe(401);
-    expect(unknownEmail.status).toBe(401);
-    expect(wrongPassword.body).toEqual(unknownEmail.body);
+    expect(wrongPassword.response.status).toBe(401);
+    expect(unknownEmail.response.status).toBe(401);
+    expect(wrongPassword.response.body).toEqual(unknownEmail.response.body);
+  });
+
+  it("aceita a senha bcrypt de quem já tinha conta antes do Better Auth", async () => {
+    const user = await prisma.user.create({
+      data: { name: "Antiga", email: "antiga@finn.test" },
+    });
+    await prisma.account.create({
+      data: {
+        userId: user.id,
+        accountId: user.id,
+        providerId: "credential",
+        password: await bcrypt.hash("senha-do-passado-1", 10),
+      },
+    });
+
+    const { response } = await signIn("antiga@finn.test", "senha-do-passado-1");
+
+    expect(response.status).toBe(200);
+    expect((await signIn("antiga@finn.test", "outra-senha-1234")).response.status).toBe(401);
+  });
+
+  it("não aceita senha que passe de 72 bytes, onde o bcrypt ignoraria o resto", async () => {
+    const user = await createUser();
+    const { response } = await signIn(user.email, `${user.password}${"x".repeat(80)}`);
+
+    expect(response.status).toBe(401);
   });
 });
 
-describe("token de acesso", () => {
-  it("bloqueia rota protegida sem token ou com token adulterado", async () => {
-    const { token } = await createUser();
+describe("sessão", () => {
+  it("libera rota protegida por cookie e por token no cabeçalho", async () => {
+    const user = await createUser();
+
+    const byCookie = await request(app).get("/api/categories").set("Cookie", user.cookie);
+    const byToken = await api(user.token).get("/api/categories");
+
+    expect(byCookie.status).toBe(200);
+    expect(byToken.status).toBe(200);
+  });
+
+  it("bloqueia rota protegida sem sessão ou com sessão adulterada", async () => {
+    const { token, cookie } = await createUser();
 
     expect((await request(app).get("/api/categories")).status).toBe(401);
     expect((await api(`${token}x`).get("/api/categories")).status).toBe(401);
+    expect((await request(app).get("/api/categories").set("Cookie", `${cookie}x`)).status).toBe(
+      401,
+    );
+    expect((await api("qualquer-coisa").get("/api/categories")).status).toBe(401);
   });
 
-  it("recusa token assinado com outro segredo", async () => {
-    const forged = jwt.sign({}, "outro-segredo-qualquer-com-mais-de-32-chars", {
-      subject: "qualquer-usuario",
-    });
-
-    expect((await api(forged).get("/api/categories")).status).toBe(401);
-  });
-
-  it("recusa token sem assinatura (alg none)", async () => {
-    const forged = jwt.sign({}, "", { algorithm: "none", subject: "qualquer-usuario" });
-
-    expect((await api(forged).get("/api/categories")).status).toBe(401);
-  });
-
-  it("expira em 15 minutos por padrão", async () => {
-    const { token } = await createUser();
-    const payload = jwt.decode(token) as { iat: number; exp: number };
-
-    expect(payload.exp - payload.iat).toBe(15 * 60);
-  });
-});
-
-describe("renovação de sessão", () => {
-  it("entrega o refresh token apenas em cookie HttpOnly", async () => {
+  it("recusa a sessão depois que ela expira", async () => {
     const user = await createUser();
-    const login = await request(app)
-      .post("/api/auth/login")
-      .send({ email: user.email, password: user.password });
-    const header = (login.headers["set-cookie"] as unknown as string[]).join(";");
-
-    expect(header).toContain("HttpOnly");
-    expect(header).toContain("SameSite=Strict");
-    expect(header).toContain("Path=/api/auth");
-    expect(login.body).not.toHaveProperty("refreshToken");
-  });
-
-  it("guarda só o hash do refresh token no banco", async () => {
-    const user = await createUser();
-    const raw = user.cookie.split("=")[1] as string;
-    const stored = await prisma.refreshToken.findFirstOrThrow({ where: { userId: user.id } });
-
-    expect(stored.tokenHash).not.toBe(raw);
-  });
-
-  it("renova a sessão e entrega um token de acesso que funciona", async () => {
-    const user = await createUser();
-    const refreshed = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
-
-    expect(refreshed.status).toBe(200);
-    expect(refreshed.body.user.email).toBe(user.email);
-    expect((await api(refreshed.body.token).get("/api/categories")).status).toBe(200);
-    expect(refreshCookieFrom(refreshed)).not.toBe(user.cookie);
-  });
-
-  it("recusa renovar sem cookie ou com cookie desconhecido", async () => {
-    expect((await request(app).post("/api/auth/refresh")).status).toBe(401);
-    expect(
-      (await request(app).post("/api/auth/refresh").set("Cookie", "finn_refresh=falso")).status,
-    ).toBe(401);
-  });
-
-  it("tolera duas abas renovando ao mesmo tempo", async () => {
-    const user = await createUser();
-    const first = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
-    const second = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
-
-    expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-  });
-
-  it("derruba a sessão inteira quando um token antigo é reutilizado", async () => {
-    const user = await createUser();
-    const rotated = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
-    const current = refreshCookieFrom(rotated);
-
-    // Simula o token antigo voltando depois da janela de tolerância.
-    await prisma.refreshToken.updateMany({
-      where: { userId: user.id, rotatedAt: { not: null } },
-      data: { rotatedAt: new Date(Date.now() - 60_000) },
-    });
-
-    const replay = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
-    const victim = await request(app).post("/api/auth/refresh").set("Cookie", current);
-
-    expect(replay.status).toBe(401);
-    expect(victim.status).toBe(401);
-    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(0);
-  });
-
-  it("recusa refresh token expirado", async () => {
-    const user = await createUser();
-    await prisma.refreshToken.updateMany({
+    await prisma.session.updateMany({
       where: { userId: user.id },
       data: { expiresAt: new Date(Date.now() - 1000) },
     });
 
-    const response = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
-    expect(response.status).toBe(401);
+    expect((await request(app).get("/api/categories").set("Cookie", user.cookie)).status).toBe(401);
   });
 
-  it("encerra a sessão no logout, sem janela de tolerância", async () => {
+  it("dura 30 dias por padrão", async () => {
+    const user = await createUser();
+    const session = await prisma.session.findFirstOrThrow({ where: { userId: user.id } });
+    const days = (session.expiresAt.getTime() - Date.now()) / 86_400_000;
+
+    expect(days).toBeGreaterThan(29.9);
+    expect(days).toBeLessThanOrEqual(30);
+  });
+
+  it("encerra a sessão no logout", async () => {
     const user = await createUser();
 
-    const logout = await request(app).post("/api/auth/logout").set("Cookie", user.cookie);
-    const replay = await request(app).post("/api/auth/refresh").set("Cookie", user.cookie);
+    const logout = await request(app)
+      .post("/api/auth/sign-out")
+      .set("Origin", "http://localhost:5173")
+      .set("Cookie", user.cookie);
 
-    expect(logout.status).toBe(204);
-    expect(replay.status).toBe(401);
+    expect(logout.status).toBe(200);
+    expect((await request(app).get("/api/categories").set("Cookie", user.cookie)).status).toBe(401);
+    expect((await api(user.token).get("/api/categories")).status).toBe(401);
+    expect(await prisma.session.count({ where: { userId: user.id } })).toBe(0);
+  });
+
+  it("recusa POST vindo de outra origem", async () => {
+    const user = await createUser();
+
+    const response = await request(app)
+      .post("/api/auth/sign-out")
+      .set("Origin", "https://site-malicioso.test")
+      .set("Cookie", user.cookie);
+
+    expect(response.status).toBe(403);
+    expect((await request(app).get("/api/categories").set("Cookie", user.cookie)).status).toBe(200);
   });
 });
 
-describe("regressões da auditoria de sessão", () => {
-  const refresh = (cookie: string) => request(app).post("/api/auth/refresh").set("Cookie", cookie);
-  const cookiesOf = (response: request.Response) =>
-    (response.headers["set-cookie"] as unknown as string[] | undefined) ?? [];
-  const activeTokens = (userId: string) =>
-    prisma.refreshToken.count({ where: { userId, rotatedAt: null } });
+describe("esqueci a senha", () => {
+  const requestReset = (email: string) =>
+    authPost("/request-password-reset", {
+      email,
+      redirectTo: "http://localhost:5173/redefinir-senha",
+    });
 
-  it("não recria a sessão se o logout acontece durante a renovação (AUTH-01)", async () => {
-    const user = await createUser();
-    const original = prisma.refreshToken.findUnique.bind(prisma.refreshToken);
-    const spy = vi.spyOn(prisma.refreshToken, "findUnique").mockImplementationOnce((async (
-      args: never,
-    ) => {
-      const found = await original(args);
-      spy.mockRestore();
-      await request(app).post("/api/auth/logout").set("Cookie", user.cookie);
-      return found;
-    }) as never);
+  /** O link que chegaria por e-mail, e o token que a tela devolve ao enviar a senha nova. */
+  const emailedToken = (): string => {
+    const url = sentEmails.at(-1)?.text.match(/https?:\/\/\S+/)?.[0];
+    if (!url) throw new Error("Nenhum e-mail com link foi enviado.");
+    return new URL(url).pathname.split("/").pop() as string;
+  };
 
-    const response = await refresh(user.cookie);
-
-    expect(response.status).toBe(401);
-    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(0);
-  });
-
-  it("nunca sobra token depois de renovação e logout em paralelo (AUTH-01)", async () => {
+  it("responde igual para e-mail cadastrado e desconhecido, e só envia ao primeiro", async () => {
     const user = await createUser();
 
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      const login = await request(app)
-        .post("/api/auth/login")
-        .send({ email: user.email, password: user.password });
-      const cookie = refreshCookieFrom(login);
+    const known = await requestReset(user.email);
+    const unknown = await requestReset("ninguem@finn.test");
 
-      await Promise.all([
-        attempt % 2 === 0
-          ? refresh(cookie)
-          : request(app).post("/api/auth/logout").set("Cookie", cookie),
-        attempt % 2 === 0
-          ? request(app).post("/api/auth/logout").set("Cookie", cookie)
-          : refresh(cookie),
-      ]);
-
-      const familyCount = await prisma.refreshToken.count({ where: { userId: user.id } });
-      await prisma.refreshToken.deleteMany({
-        where: { userId: user.id, rotatedAt: { not: null } },
-      });
-      const remaining = await activeTokens(user.id);
-
-      // O token original de createUser é o único que pode sobrar.
-      expect(remaining, `rodada ${attempt}, ${familyCount} tokens`).toBe(1);
-    }
+    expect(known.status).toBe(200);
+    expect(unknown.status).toBe(200);
+    expect(known.body).toEqual(unknown.body);
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0]?.to).toBe(user.email);
   });
 
-  it("gera um único sucessor com 10 renovações simultâneas (AUTH-02)", async () => {
+  it("troca a senha com o link, que vale uma vez só", async () => {
+    const user = await createUser();
+    await requestReset(user.email);
+    const token = emailedToken();
+
+    const reset = await authPost("/reset-password", { token, newPassword: "senha-nova-456" });
+    const reuse = await authPost("/reset-password", { token, newPassword: "outra-senha-789" });
+
+    expect(reset.status).toBe(200);
+    expect(reuse.status).toBe(400);
+    expect((await signIn(user.email, user.password)).response.status).toBe(401);
+    expect((await signIn(user.email, "senha-nova-456")).response.status).toBe(200);
+  });
+
+  it("derruba as sessões abertas quando a senha muda", async () => {
+    const user = await createUser();
+    await requestReset(user.email);
+
+    await authPost("/reset-password", { token: emailedToken(), newPassword: "senha-nova-456" });
+
+    expect((await request(app).get("/api/categories").set("Cookie", user.cookie)).status).toBe(401);
+    expect((await api(user.token).get("/api/categories")).status).toBe(401);
+  });
+
+  it("recusa o link depois de 1 hora", async () => {
+    const user = await createUser();
+    await requestReset(user.email);
+    const token = emailedToken();
+    await prisma.verification.updateMany({ data: { expiresAt: new Date(Date.now() - 1000) } });
+
+    const reset = await authPost("/reset-password", { token, newPassword: "senha-nova-456" });
+
+    expect(reset.status).toBe(400);
+    expect((await signIn(user.email, user.password)).response.status).toBe(200);
+  });
+
+  it("recusa senha nova curta ou token inventado", async () => {
+    const user = await createUser();
+    await requestReset(user.email);
+
+    const short = await authPost("/reset-password", { token: emailedToken(), newPassword: "123" });
+    const forged = await authPost("/reset-password", {
+      token: "inventado",
+      newPassword: "senha-nova-456",
+    });
+
+    expect(short.status).toBe(400);
+    expect(forged.status).toBe(400);
+    expect((await signIn(user.email, user.password)).response.status).toBe(200);
+  });
+
+  it("não manda o link para um endereço de redirecionamento de fora", async () => {
     const user = await createUser();
 
-    const responses = await Promise.all(Array.from({ length: 10 }, () => refresh(user.cookie)));
+    const response = await authPost("/request-password-reset", {
+      email: user.email,
+      redirectTo: "https://site-malicioso.test/capturar",
+    });
 
-    expect(responses.map((response) => response.status)).toEqual(Array(10).fill(200));
-    expect(responses.filter((response) => cookiesOf(response).length > 0)).toHaveLength(1);
-    expect(await activeTokens(user.id)).toBe(1);
-    for (const response of responses) {
-      expect((await api(response.body.token).get("/api/categories")).status).toBe(200);
-    }
+    expect(response.status).toBe(403);
+    expect(sentEmails).toHaveLength(0);
   });
+});
 
-  it("não emite novo token ao repetir dentro da tolerância (AUTH-02)", async () => {
-    const user = await createUser();
+describe("login com Google", () => {
+  it("fica desligado sem as credenciais, e a tela é avisada", async () => {
+    const config = await request(app).get("/api/config");
+    const social = await authPost("/sign-in/social", { provider: "google", callbackURL: "/" });
 
-    await refresh(user.cookie);
-    const repeated = await refresh(user.cookie);
-
-    expect(repeated.status).toBe(200);
-    expect(cookiesOf(repeated)).toEqual([]);
-    expect(await prisma.refreshToken.count({ where: { userId: user.id } })).toBe(2);
-  });
-
-  it("mantém o cookie quando a renovação falha por erro do servidor (AUTH-03)", async () => {
-    const user = await createUser();
-    const spy = vi
-      .spyOn(prisma.refreshToken, "findUnique")
-      .mockRejectedValueOnce(new Error("banco fora"));
-
-    const failed = await refresh(user.cookie);
-    spy.mockRestore();
-    const retried = await refresh(user.cookie);
-
-    expect(failed.status).toBe(500);
-    expect(cookiesOf(failed)).toEqual([]);
-    expect(retried.status).toBe(200);
-  });
-
-  it("apaga o cookie quando a sessão é inválida (AUTH-03)", async () => {
-    const response = await refresh("finn_refresh=desconhecido");
-
-    expect(response.status).toBe(401);
-    expect(cookiesOf(response).join(";")).toContain("Expires=Thu, 01 Jan 1970");
+    expect(config.body).toEqual({ googleLogin: false });
+    expect(social.status).toBeGreaterThanOrEqual(400);
   });
 });

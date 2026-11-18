@@ -1,5 +1,4 @@
 import "dotenv/config";
-import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { resolveDatabaseUrl } from "./database-url";
 
@@ -12,34 +11,15 @@ const isValidTimeZone = (timeZone: string): boolean => {
   }
 };
 
-// Assina um token de prova: "900" sem unidade vira 900 ms, e o login quebraria só na hora.
-const lastsAtLeastOneMinute = (expiresIn: string): boolean => {
-  try {
-    const token = jwt.sign({}, "validacao-da-configuracao", {
-      expiresIn: expiresIn as jwt.SignOptions["expiresIn"],
-    });
-    const { iat, exp } = jwt.decode(token) as { iat: number; exp: number };
-    return exp - iat >= 60;
-  } catch {
-    return false;
-  }
-};
-
 export const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3333),
   DATABASE_URL: z.url(
     "Defina DATABASE_URL, ou POSTGRES_HOST, POSTGRES_USER, POSTGRES_PASSWORD e POSTGRES_DB.",
   ),
+  // Assina e cifra os dados do Better Auth. O nome é antigo, do tempo do JWT próprio.
   JWT_SECRET: z.string().min(32, "JWT_SECRET deve ter pelo menos 32 caracteres."),
-  ACCESS_TOKEN_EXPIRES_IN: z
-    .string()
-    .default("15m")
-    .refine(
-      lastsAtLeastOneMinute,
-      "ACCESS_TOKEN_EXPIRES_IN deve ser uma duração de pelo menos 1 minuto, como 15m.",
-    ),
-  REFRESH_TOKEN_DAYS: z.coerce.number().int().positive().default(30),
+  SESSION_DAYS: z.coerce.number().int().positive().default(30),
   COOKIE_SECURE: z.enum(["true", "false"]).optional(),
   FRONTEND_ORIGIN: z.url().default("http://localhost:5173"),
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
@@ -66,6 +46,21 @@ export const envSchema = z.object({
         .filter(Boolean);
       return emails.length > 0 ? emails : undefined;
     }),
+  // Login com Google: o botão só aparece quando as duas variáveis existem.
+  GOOGLE_CLIENT_ID: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  GOOGLE_CLIENT_SECRET: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  // E-mails de redefinição de senha. Sem a chave, o link só aparece no log (fora da produção).
+  RESEND_API_KEY: z
+    .string()
+    .optional()
+    .transform((value) => value || undefined),
+  EMAIL_FROM: z.string().min(3).default("Finn <onboarding@resend.dev>"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).optional(),
 });
 
@@ -73,7 +68,9 @@ const parsed = envSchema.parse({ ...process.env, DATABASE_URL: resolveDatabaseUr
 
 /** Variáveis antigas que ainda aparecem no .env e não fazem mais efeito, com a substituta. */
 export const ignoredVariables = Object.entries({
-  JWT_EXPIRES_IN: "ACCESS_TOKEN_EXPIRES_IN",
+  JWT_EXPIRES_IN: "SESSION_DAYS",
+  ACCESS_TOKEN_EXPIRES_IN: "SESSION_DAYS",
+  REFRESH_TOKEN_DAYS: "SESSION_DAYS",
 }).filter(([name]) => process.env[name] !== undefined);
 
 export const env = {

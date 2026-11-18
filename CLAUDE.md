@@ -69,10 +69,15 @@ sob `/api`.
   de `src/lib/dates.ts`, que respeita `APP_TIMEZONE`; `new Date()` erra à noite no Brasil. O frontend
   roda os testes com `TZ=America/Sao_Paulo` para expor esses bugs.
 - **Dinheiro:** `Decimal(15, 2)` no banco, com `CHECK` de valor positivo nas migrations.
-- **Sessão:** access token JWT curto, enviado por `Authorization: Bearer` e mantido só em memória no
-  frontend (`frontend/src/api.ts`, nunca em `localStorage`). O refresh token fica em cookie HttpOnly
-  `SameSite=Strict`, é guardado como hash e roda a cada uso. Reutilizar um token antigo fora da janela
-  de 30 s derruba toda a família (`auth.service.ts`).
+- **Sessão e login:** Better Auth (`src/lib/auth.ts`), montado em `/api/auth/*` em `app.ts` **antes**
+  do `express.json` (ele lê o corpo sozinho). A sessão é o cookie `finn.session_token`, HttpOnly e
+  `SameSite=Lax` (o retorno do Google exige Lax), guardada na tabela `Session`; `ensureAuthenticated`
+  consulta `auth.api.getSession`, e o mesmo token vale em `Authorization: Bearer`, para o aplicativo
+  futuro. Senhas continuam bcrypt, na tabela `Account` (`providerId = "credential"`); `User` não tem
+  senha. "Esqueci a senha" envia o link por `src/lib/mailer.ts` (Resend), que vale 1 hora, uma vez, e
+  derruba as sessões. Os limites de tentativas são do Express (`rate-limit.middleware.ts`), não do
+  Better Auth. O vínculo automático entre senha e Google está desligado de propósito. Nunca guarde
+  sessão em `localStorage`. Detalhes em `docs/AUTENTICACAO.md`.
 - **Cartões e faturas:** a fatura não é guardada: `src/lib/billing-calendar.ts` a calcula a partir
   de `closingDay` e `dueDay` do cartão, e ela é identificada pelo mês do **vencimento** ("fatura de
   abril" é a que vence em abril). Compra no dia do fechamento vai para a fatura seguinte. Parcelas e
@@ -92,7 +97,7 @@ caso de 401, uma única renovação é compartilhada entre as requisições pend
 ## Deploy
 
 `docker-compose.yml` sobe `db`, `migrate` (uso único), `api` e `web`. O nginx de `frontend/nginx.conf`
-serve a SPA e faz proxy de `/api` na mesma origem, o que o cookie `SameSite=Strict` exige. Detalhes
+serve a SPA e faz proxy de `/api` na mesma origem, o que mantém o cookie de sessão e os links de e-mail funcionando. Detalhes
 em `docs/DEPLOY.md`.
 
 ## Convenções do repositório

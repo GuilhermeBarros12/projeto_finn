@@ -9,7 +9,7 @@ beforeEach(resetDatabase);
 describe("comportamento HTTP", () => {
   it("responde 400 para JSON malformado", async () => {
     const response = await request(app)
-      .post("/api/auth/login")
+      .post("/api/auth/sign-in/email")
       .set("Content-Type", "application/json")
       .send("{quebrado");
 
@@ -19,7 +19,7 @@ describe("comportamento HTTP", () => {
 
   it("responde 413 para corpo grande demais", async () => {
     const response = await request(app)
-      .post("/api/auth/login")
+      .post("/api/auth/sign-in/email")
       .send({ email: "a@b.co", password: "x".repeat(200_000) });
 
     expect(response.status).toBe(413);
