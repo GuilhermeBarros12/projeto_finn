@@ -1,0 +1,14 @@
+Adicionar a configuração de preview local do Claude
+chore-claude-configuracao-de-preview-local
+
+Resumo
+Versiona o .claude/launch.json, que descreve como subir a API e o frontend em desenvolvimento para a visualização do app no Claude.
+
+Arquivos criados
+- .claude/launch.json: duas configurações, "api" (npm run dev, porta 3333) e "frontend" (npm run dev --prefix frontend, porta 5173).
+
+Regras preservadas
+- Nenhum segredo no arquivo; os comandos são os mesmos de CLAUDE.md.
+
+Validação executada
+- git diff --cached: somente o novo arquivo, sem alteração de código.
